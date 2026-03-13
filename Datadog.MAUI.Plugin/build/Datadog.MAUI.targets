@@ -1,0 +1,118 @@
+<Project>
+  <!--
+    =====================================================================
+    iOS: Prevent IL trimmer from removing Datadog binding assemblies.
+    
+    Datadog iOS binding assemblies are transitive dependencies of this plugin.
+    The .NET IL trimmer may strip them if it determines the consumer doesn't 
+    directly reference enough of their types. When trimmed, the iOS SDK no 
+    longer discovers their native resources (.resources.zip containing the 
+    xcframeworks), so the native linker cannot find Datadog's Objective-C 
+    symbols — even though the managed static registrar already generated 
+    references to them in registrar.o.
+    
+    Fix: Mark all Datadog iOS binding assemblies as trimmer roots so they 
+    (and their associated native xcframeworks) are always preserved.
+    =====================================================================
+  -->
+  <Target Name="_PreserveDatadogIOSBindingAssemblies"
+          BeforeTargets="PrepareForILLink"
+          Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <ItemGroup>
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.Internal" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.Core" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.RUM" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.Logs" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.Trace" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.CrashReporting" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.SessionReplay" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.WebViewTracking" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.Flags" />
+      <TrimmerRootAssembly Include="Datadog.MAUI.iOS.OpenTelemetryApi" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    =====================================================================
+    iOS: Work around Swift class stub linker errors.
+
+    The Datadog iOS SDK xcframeworks are compiled with Swift library evolution
+    enabled (-enable-library-evolution). This causes certain ObjC-exposed Swift
+    classes to be emitted as "class stubs" (stored in __objc_stublist) rather
+    than full classes (in __objc_classlist). Class stubs are resolved lazily by
+    the ObjC runtime at load time, but they do NOT generate the traditional
+    _OBJC_CLASS_$_ linker symbol.
+
+    The .NET managed static registrar generates registrar.o with references to
+    _OBJC_CLASS_$_DDConfiguration (etc.), which the static linker cannot resolve.
+
+    Fix: Pass -Wl,-U flags for each affected symbol, telling the linker to defer
+    resolution of these specific symbols to runtime.
+    =====================================================================
+  -->
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <_DatadogSwiftClassStubFlags>-Wl,-U,_OBJC_CLASS_$_DDConfiguration -Wl,-U,_OBJC_CLASS_$_DDSite -Wl,-U,_OBJC_CLASS_$_DDTrackingConsent -Wl,-U,_OBJC_CLASS_$_DDURLSessionInstrumentationConfiguration -Wl,-U,_OBJC_CLASS_$_DDURLSessionInstrumentationFirstPartyHostsTracing -Wl,-U,_OBJC_CLASS_$_DDRUMConfiguration -Wl,-U,_OBJC_CLASS_$_DDTraceConfiguration -Wl,-U,_OBJC_CLASS_$_DDTraceFirstPartyHostsTracing -Wl,-U,_OBJC_CLASS_$_DDTraceURLSessionTracking -Wl,-U,_OBJC_CLASS_$_DDLogEvent -Wl,-U,_OBJC_CLASS_$_DDSessionReplayConfiguration</_DatadogSwiftClassStubFlags>
+    <MtouchExtraArgs>$(MtouchExtraArgs) $(_DatadogSwiftClassStubFlags)</MtouchExtraArgs>
+  </PropertyGroup>
+
+  <!--
+    =====================================================================
+    Android: Fix duplicate class errors caused by AndroidX Ktx packages.
+
+    The Ktx NuGet packages (e.g. Activity.Ktx, Fragment.Ktx, etc.) contain Kotlin extension
+    classes that overlap with classes already present in their non-Ktx counterparts
+    (e.g. Activity, Fragment). When both are resolved via transitive dependencies,
+    D8/R8 fails with "Type X is defined multiple times".
+
+    Similarly, Compose.Runtime.Annotation ships both .Android and .Jvm variants
+    that contain overlapping classes.
+
+    This targets file removes the duplicate JARs from the D8 compilation input
+    after AAR extraction but before Java/D8 compilation, preventing the duplicate
+    class errors while preserving all Android resources from the Ktx AARs.
+
+    IMPORTANT: Some Ktx packages contain unique classes that do NOT exist in their
+    non-Ktx counterparts (e.g. androidx.core:core-ktx provides BundleKt, which is
+    required by androidx.lifecycle SavedStateHandlesProvider). These packages must
+    be preserved to avoid NoClassDefFoundError at runtime.
+    =====================================================================
+  -->
+
+  <Target Name="_RemoveDuplicateAndroidXKtxJars"
+          AfterTargets="_GetLibraryImports"
+          BeforeTargets="_CheckDuplicateJavaLibraries;_DetermineJavaLibrariesToCompile"
+          Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+
+    <!--
+      Identify Ktx JARs by reading the AndroidManifest.xml in each extracted lp/ directory.
+      Ktx packages have a package name containing ".ktx" in their manifest.
+      We remove only the classes.jar (from ExtractedJarImports), NOT the AAR itself,
+      so Android resources from the Ktx AARs are still available to AAPT2.
+
+      We must preserve certain Ktx packages that contain unique classes not present
+      in their non-Ktx counterparts:
+        - androidx.core:core-ktx (provides BundleKt, used by lifecycle SavedStateHandlesProvider)
+          Its AndroidManifest has package="androidx.core.ktx"
+    -->
+    <ItemGroup>
+      <_KtxJarsToRemove Include="@(ExtractedJarImports)"
+          Condition="$([System.IO.File]::Exists('$([System.IO.Path]::GetDirectoryName(%(Identity)))/AndroidManifest.xml')) And
+                     $([System.IO.File]::ReadAllText('$([System.IO.Path]::GetDirectoryName(%(Identity)))/AndroidManifest.xml').Contains('.ktx')) And
+                     !$([System.IO.File]::ReadAllText('$([System.IO.Path]::GetDirectoryName(%(Identity)))/AndroidManifest.xml').Contains('androidx.core.ktx'))" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ExtractedJarImports Remove="@(_KtxJarsToRemove)" />
+    </ItemGroup>
+
+    <!-- Remove Compose annotation JVM JAR (overlaps with the .Android variant) -->
+    <ItemGroup>
+      <_ComposeJvmJarsToRemove Include="@(AndroidJavaLibrary)" 
+          Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Identity)', 'runtime-annotation-jvm\.jar$'))" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <AndroidJavaLibrary Remove="@(_ComposeJvmJarsToRemove)" />
+    </ItemGroup>
+  </Target>
+</Project>
