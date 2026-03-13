@@ -36,6 +36,8 @@
       <SmartLink>True</SmartLink>
       <ForceLoad>True</ForceLoad>
       <LinkWithSwiftSystemLibraries>True</LinkWithSwiftSystemLibraries>
+      <!-- Swift class stub: DDRUMConfiguration is emitted as a class stub by Swift library evolution -->
+      <LinkerFlags>-Wl,-U,_OBJC_CLASS_$_DDRUMConfiguration</LinkerFlags>
     </NativeReference>
   </ItemGroup>
 </Project>

@@ -37,6 +37,10 @@
       <SmartLink>True</SmartLink>
       <ForceLoad>True</ForceLoad>
       <LinkWithSwiftSystemLibraries>True</LinkWithSwiftSystemLibraries>
+      <!-- Swift class stubs: these ObjC classes are emitted as class stubs (in __objc_stublist)
+           by the Swift compiler with library evolution enabled. The ObjC runtime resolves them
+           at load time, but the static linker needs -U to defer resolution. -->
+      <LinkerFlags>-Wl,-U,_OBJC_CLASS_$_DDConfiguration -Wl,-U,_OBJC_CLASS_$_DDSite -Wl,-U,_OBJC_CLASS_$_DDTrackingConsent -Wl,-U,_OBJC_CLASS_$_DDURLSessionInstrumentationConfiguration -Wl,-U,_OBJC_CLASS_$_DDURLSessionInstrumentationFirstPartyHostsTracing</LinkerFlags>
     </NativeReference>
   </ItemGroup>
 </Project>

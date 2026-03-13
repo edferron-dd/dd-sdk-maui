@@ -35,6 +35,8 @@
       <SmartLink>True</SmartLink>
       <ForceLoad>True</ForceLoad>
       <LinkWithSwiftSystemLibraries>True</LinkWithSwiftSystemLibraries>
+      <!-- Swift class stubs: these classes are emitted as class stubs by Swift library evolution -->
+      <LinkerFlags>-Wl,-U,_OBJC_CLASS_$_DDTraceConfiguration -Wl,-U,_OBJC_CLASS_$_DDTraceFirstPartyHostsTracing -Wl,-U,_OBJC_CLASS_$_DDTraceURLSessionTracking</LinkerFlags>
     </NativeReference>
   </ItemGroup>
 </Project>
