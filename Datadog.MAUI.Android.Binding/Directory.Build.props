@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- Single source of truth for package versions -->
-    <DatadogSdkVersion>3.6.2</DatadogSdkVersion>
+    <DatadogSdkVersion>3.6.2-preview.1</DatadogSdkVersion>
     <!-- Upstream Android SDK artifact version on Maven Central -->
     <DatadogAndroidMavenVersion>3.6.0</DatadogAndroidMavenVersion>
     <Version>$(DatadogSdkVersion)</Version>

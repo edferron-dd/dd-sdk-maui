@@ -45,14 +45,44 @@
 
     The .NET managed static registrar generates registrar.o with references to
     _OBJC_CLASS_$_DDConfiguration (etc.), which the static linker cannot resolve.
+    Additionally, the build system adds these symbols to an exported symbols list
+    (-exported_symbols_list), which requires them to be defined — making the
+    simpler -Wl,-U approach insufficient.
 
-    Fix: Pass -Wl,-U flags for each affected symbol, telling the linker to defer
-    resolution of these specific symbols to runtime.
+    Fix: Two-pronged approach:
+    1. Remove the class stub symbols from _ProcessedReferenceNativeSymbol so they
+       are excluded from the exported symbols list (mtouch-symbols.list) and from
+       any -u force-load flags.
+    2. Pass -Wl,-U flags for each affected symbol via MtouchExtraArgs, telling the
+       linker to defer resolution to runtime for any remaining references in
+       registrar.o.
     =====================================================================
   -->
+  <Target Name="_RemoveDatadogSwiftClassStubSymbols"
+          AfterTargets="_LoadLinkerOutput"
+          BeforeTargets="_CompileNativeExecutable;_LinkNativeExecutable"
+          Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <ItemGroup>
+      <!-- Remove Swift class stub symbols from the native symbols list.
+           These symbols don't exist as _OBJC_CLASS_$_ in the xcframeworks
+           (they use __objc_stublist instead), so they must not appear in the
+           exported symbols list or as -u force-load flags. -->
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDConfiguration" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDSite" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDTrackingConsent" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDURLSessionInstrumentationConfiguration" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDURLSessionInstrumentationFirstPartyHostsTracing" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDRUMConfiguration" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDTraceConfiguration" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDTraceFirstPartyHostsTracing" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDTraceURLSessionTracking" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDLogEvent" />
+      <_ProcessedReferenceNativeSymbol Remove="_OBJC_CLASS_$_DDSessionReplayConfiguration" />
+    </ItemGroup>
+  </Target>
+
   <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
-    <_DatadogSwiftClassStubFlags>-Wl,-U,_OBJC_CLASS_$_DDConfiguration -Wl,-U,_OBJC_CLASS_$_DDSite -Wl,-U,_OBJC_CLASS_$_DDTrackingConsent -Wl,-U,_OBJC_CLASS_$_DDURLSessionInstrumentationConfiguration -Wl,-U,_OBJC_CLASS_$_DDURLSessionInstrumentationFirstPartyHostsTracing -Wl,-U,_OBJC_CLASS_$_DDRUMConfiguration -Wl,-U,_OBJC_CLASS_$_DDTraceConfiguration -Wl,-U,_OBJC_CLASS_$_DDTraceFirstPartyHostsTracing -Wl,-U,_OBJC_CLASS_$_DDTraceURLSessionTracking -Wl,-U,_OBJC_CLASS_$_DDLogEvent -Wl,-U,_OBJC_CLASS_$_DDSessionReplayConfiguration</_DatadogSwiftClassStubFlags>
-    <MtouchExtraArgs>$(MtouchExtraArgs) $(_DatadogSwiftClassStubFlags)</MtouchExtraArgs>
+    <MtouchExtraArgs>$(MtouchExtraArgs) -gcc_flags &quot;-Wl,-U,_OBJC_CLASS_$_DDConfiguration -Wl,-U,_OBJC_CLASS_$_DDSite -Wl,-U,_OBJC_CLASS_$_DDTrackingConsent -Wl,-U,_OBJC_CLASS_$_DDURLSessionInstrumentationConfiguration -Wl,-U,_OBJC_CLASS_$_DDURLSessionInstrumentationFirstPartyHostsTracing -Wl,-U,_OBJC_CLASS_$_DDRUMConfiguration -Wl,-U,_OBJC_CLASS_$_DDTraceConfiguration -Wl,-U,_OBJC_CLASS_$_DDTraceFirstPartyHostsTracing -Wl,-U,_OBJC_CLASS_$_DDTraceURLSessionTracking -Wl,-U,_OBJC_CLASS_$_DDLogEvent -Wl,-U,_OBJC_CLASS_$_DDSessionReplayConfiguration&quot;</MtouchExtraArgs>
   </PropertyGroup>
 
   <!--

@@ -36,8 +36,7 @@
       <SmartLink>True</SmartLink>
       <ForceLoad>True</ForceLoad>
       <LinkWithSwiftSystemLibraries>True</LinkWithSwiftSystemLibraries>
-      <!-- Swift class stub: DDSessionReplayConfiguration is emitted as a class stub by Swift library evolution -->
-      <LinkerFlags>-Wl,-U,_OBJC_CLASS_$_DDSessionReplayConfiguration</LinkerFlags>
+      <!-- Swift class stub linker flags are provided via Datadog.MAUI.targets (buildTransitive) -->
     </NativeReference>
   </ItemGroup>
 </Project>
