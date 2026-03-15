@@ -2,5 +2,5 @@ using System;
 
 namespace DatadogMaui.iOS.Flags
 {
-    // Placeholder
+    // No enums or structs — DatadogFlags exposes no ObjC API surface.
 }

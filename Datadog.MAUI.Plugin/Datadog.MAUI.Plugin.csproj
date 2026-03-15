@@ -42,16 +42,15 @@
     <ProjectReference Include="../Datadog.MAUI.Android.Binding/dd-sdk-android-okhttp-otel/dd-sdk-android-okhttp-otel.csproj" />
   </ItemGroup>
 
-  <!-- iOS Binding project references for testing (temporary) -->
+  <!-- iOS Binding project references -->
+  <!-- DatadogWrapper is the Swift wrapper that resolves class stub crashes on real devices.   -->
+  <!-- It transitively brings in Core, RUM, Logs, Trace, and SessionReplay xcframeworks.      -->
   <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
+    <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogWrapper/DatadogWrapper.csproj" />
+    <!-- Remaining frameworks not wrapped but still needed for their xcframeworks -->
     <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogInternal/DatadogInternal.csproj" />
-    <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogCore/DatadogCore.csproj" />
     <ProjectReference Include="../Datadog.MAUI.iOS.Binding/OpenTelemetryApi/OpenTelemetryApi.csproj" />
-    <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogRUM/DatadogRUM.csproj" />
-    <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogLogs/DatadogLogs.csproj" />
-    <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogTrace/DatadogTrace.csproj" />
     <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogCrashReporting/DatadogCrashReporting.csproj" />
-    <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogSessionReplay/DatadogSessionReplay.csproj" />
     <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogWebViewTracking/DatadogWebViewTracking.csproj" />
     <ProjectReference Include="../Datadog.MAUI.iOS.Binding/DatadogFlags/DatadogFlags.csproj" />
   </ItemGroup>

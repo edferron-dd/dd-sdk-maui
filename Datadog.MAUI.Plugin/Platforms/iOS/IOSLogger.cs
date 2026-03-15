@@ -1,177 +1,117 @@
+using DatadogWrapper;
 using Datadog.Maui.Logs;
-using Datadog.iOS.DatadogLogs;
-using Datadog.iOS.DatadogInternal;
 using Foundation;
 
 namespace Datadog.Maui.Platforms.iOS;
 
+/// <summary>
+/// iOS logger implementation backed by the DatadogWrapper Swift static library.
+/// All dd-sdk-ios Swift class stubs are resolved inside Swift code — this class
+/// only interacts with plain ObjC types from DDWrapperLogs.
+/// </summary>
 internal class IOSLogger : ILogger
 {
-    private readonly DDLogger _nativeLogger;
+    private readonly string _loggerId;
 
     public IOSLogger(string name)
     {
         Name = name;
-
-        var config = new DDLoggerConfiguration(
-            service: null,
-            name: name,
-            networkInfoEnabled: true,
-            bundleWithRumEnabled: true,
-            bundleWithTraceEnabled: true,
-            remoteSampleRate: 100.0f,
-            remoteLogThreshold: DDLogLevel.Debug,
-            printLogsToConsole: false
-        );
-
-        _nativeLogger = DDLogger.CreateWith(config);
+        _loggerId = DDWrapperLogs.CreateLogger(name, service: null);
     }
 
     public string Name { get; }
 
     public void Debug(string message, Exception? error = null, Dictionary<string, object>? attributes = null)
     {
-        var nsAttributes = attributes != null ? ConvertAttributes(attributes) : new NSDictionary<NSString, NSObject>();
         if (error != null)
-        {
-            var nsError = NSError.FromDomain(new NSString("Exception"), 0, NSDictionary<NSString, NSObject>.FromObjectAndKey(
-                new NSString(error.ToString()), NSError.LocalizedDescriptionKey));
-            _nativeLogger.Debug(message, nsError, nsAttributes);
-        }
+            DDWrapperLogs.DebugWithError(_loggerId, message, "Exception", 0, error.ToString(), Empty());
         else
-        {
-            _nativeLogger.Debug(message, nsAttributes);
-        }
+            DDWrapperLogs.Debug(_loggerId, message, ConvertAttributes(attributes));
     }
 
     public void Info(string message, Exception? error = null, Dictionary<string, object>? attributes = null)
     {
-        var nsAttributes = attributes != null ? ConvertAttributes(attributes) : new NSDictionary<NSString, NSObject>();
         if (error != null)
-        {
-            var nsError = NSError.FromDomain(new NSString("Exception"), 0, NSDictionary<NSString, NSObject>.FromObjectAndKey(
-                new NSString(error.ToString()), NSError.LocalizedDescriptionKey));
-            _nativeLogger.Info(message, nsError, nsAttributes);
-        }
+            DDWrapperLogs.InfoWithError(_loggerId, message, "Exception", 0, error.ToString(), Empty());
         else
-        {
-            _nativeLogger.Info(message, nsAttributes);
-        }
+            DDWrapperLogs.Info(_loggerId, message, ConvertAttributes(attributes));
     }
 
     public void Notice(string message, Exception? error = null, Dictionary<string, object>? attributes = null)
     {
-        var nsAttributes = attributes != null ? ConvertAttributes(attributes) : new NSDictionary<NSString, NSObject>();
+        // Notice maps to info-level in the wrapper
         if (error != null)
-        {
-            var nsError = NSError.FromDomain(new NSString("Exception"), 0, NSDictionary<NSString, NSObject>.FromObjectAndKey(
-                new NSString(error.ToString()), NSError.LocalizedDescriptionKey));
-            _nativeLogger.Notice(message, nsError, nsAttributes);
-        }
+            DDWrapperLogs.InfoWithError(_loggerId, message, "Exception", 0, error.ToString(), Empty());
         else
-        {
-            _nativeLogger.Notice(message, nsAttributes);
-        }
+            DDWrapperLogs.Notice(_loggerId, message, ConvertAttributes(attributes));
     }
 
     public void Warn(string message, Exception? error = null, Dictionary<string, object>? attributes = null)
     {
-        var nsAttributes = attributes != null ? ConvertAttributes(attributes) : new NSDictionary<NSString, NSObject>();
         if (error != null)
-        {
-            var nsError = NSError.FromDomain(new NSString("Exception"), 0, NSDictionary<NSString, NSObject>.FromObjectAndKey(
-                new NSString(error.ToString()), NSError.LocalizedDescriptionKey));
-            _nativeLogger.Warn(message, nsError, nsAttributes);
-        }
+            DDWrapperLogs.WarnWithError(_loggerId, message, "Exception", 0, error.ToString(), Empty());
         else
-        {
-            _nativeLogger.Warn(message, nsAttributes);
-        }
+            DDWrapperLogs.Warn(_loggerId, message, ConvertAttributes(attributes));
     }
 
     public void Error(string message, Exception? error = null, Dictionary<string, object>? attributes = null)
     {
-        var nsAttributes = attributes != null ? ConvertAttributes(attributes) : new NSDictionary<NSString, NSObject>();
         if (error != null)
-        {
-            var nsError = NSError.FromDomain(new NSString("Exception"), 0, NSDictionary<NSString, NSObject>.FromObjectAndKey(
-                new NSString(error.ToString()), NSError.LocalizedDescriptionKey));
-            _nativeLogger.Error(message, nsError, nsAttributes);
-        }
+            DDWrapperLogs.ErrorWithError(_loggerId, message, "Exception", 0, error.ToString(), Empty());
         else
-        {
-            _nativeLogger.Error(message, nsAttributes);
-        }
+            DDWrapperLogs.Error(_loggerId, message, ConvertAttributes(attributes));
     }
 
     public void Critical(string message, Exception? error = null, Dictionary<string, object>? attributes = null)
     {
-        var nsAttributes = attributes != null ? ConvertAttributes(attributes) : new NSDictionary<NSString, NSObject>();
         if (error != null)
-        {
-            var nsError = NSError.FromDomain(new NSString("Exception"), 0, NSDictionary<NSString, NSObject>.FromObjectAndKey(
-                new NSString(error.ToString()), NSError.LocalizedDescriptionKey));
-            _nativeLogger.Critical(message, nsError, nsAttributes);
-        }
+            DDWrapperLogs.CriticalWithError(_loggerId, message, "Exception", 0, error.ToString(), Empty());
         else
-        {
-            _nativeLogger.Critical(message, nsAttributes);
-        }
+            DDWrapperLogs.Critical(_loggerId, message, ConvertAttributes(attributes));
     }
 
     public void Log(Logs.LogLevel level, string message, Exception? error = null, Dictionary<string, object>? attributes = null)
     {
         switch (level)
         {
-            case Logs.LogLevel.Debug:
-                Debug(message, error, attributes);
-                break;
-            case Logs.LogLevel.Info:
-                Info(message, error, attributes);
-                break;
-            case Logs.LogLevel.Notice:
-                Notice(message, error, attributes);
-                break;
-            case Logs.LogLevel.Warn:
-                Warn(message, error, attributes);
-                break;
-            case Logs.LogLevel.Error:
-                Error(message, error, attributes);
-                break;
-            case Logs.LogLevel.Critical:
-                Critical(message, error, attributes);
-                break;
+            case Logs.LogLevel.Debug:    Debug(message, error, attributes);    break;
+            case Logs.LogLevel.Info:     Info(message, error, attributes);     break;
+            case Logs.LogLevel.Notice:   Notice(message, error, attributes);   break;
+            case Logs.LogLevel.Warn:     Warn(message, error, attributes);     break;
+            case Logs.LogLevel.Error:    Error(message, error, attributes);    break;
+            case Logs.LogLevel.Critical: Critical(message, error, attributes); break;
         }
     }
 
     public void AddAttribute(string key, object value)
     {
-        _nativeLogger.AddAttributeForKey(key, NSObject.FromObject(value));
+        DDWrapperLogs.AddAttribute(_loggerId, key, value?.ToString() ?? string.Empty);
     }
 
     public void RemoveAttribute(string key)
     {
-        _nativeLogger.RemoveAttributeForKey(key);
+        DDWrapperLogs.RemoveAttribute(_loggerId, key);
     }
 
     public void AddTag(string key, string value)
     {
-        _nativeLogger.AddTagWithKey(key, value);
+        DDWrapperLogs.AddTag(_loggerId, key, value);
     }
 
     public void RemoveTag(string key)
     {
-        _nativeLogger.RemoveTagWithKey(key);
+        DDWrapperLogs.RemoveTag(_loggerId, key);
     }
 
-    private static NSDictionary<NSString, NSObject> ConvertAttributes(Dictionary<string, object> attributes)
+    private static NSDictionary<NSString, NSObject> ConvertAttributes(Dictionary<string, object>? attributes)
     {
         if (attributes == null || attributes.Count == 0)
-            return new NSDictionary<NSString, NSObject>();
+            return Empty();
 
         var keys = attributes.Keys.Select(k => new NSString(k)).ToArray();
         var values = attributes.Values.Select(v => NSObject.FromObject(v)).ToArray();
-
         return NSDictionary<NSString, NSObject>.FromObjectsAndKeys(values, keys);
     }
+
+    private static NSDictionary<NSString, NSObject> Empty() => new NSDictionary<NSString, NSObject>();
 }

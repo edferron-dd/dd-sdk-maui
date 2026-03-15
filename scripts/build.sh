@@ -74,7 +74,7 @@ done
 # Build and pack iOS modules (only on macOS with XCFrameworks)
 if [ "$(uname)" = "Darwin" ]; then
     echo -e "\n${GREEN}Building iOS modules:${NC}"
-    if [ -d "$ROOT_DIR/Datadog.MAUI.iOS.Binding/DatadogCore.xcframework" ]; then
+    if [ -d "$ROOT_DIR/Datadog.MAUI.iOS.Binding/artifacts/DatadogCore.xcframework" ]; then
         IOS_MODULES=(
             "DatadogInternal/DatadogInternal.csproj"
             "DatadogCore/DatadogCore.csproj"
@@ -86,6 +86,7 @@ if [ "$(uname)" = "Darwin" ]; then
             "DatadogWebViewTracking/DatadogWebViewTracking.csproj"
             "DatadogFlags/DatadogFlags.csproj"
             "OpenTelemetryApi/OpenTelemetryApi.csproj"
+            "DatadogWrapper/DatadogWrapper.csproj"
         )
         
         for module in "${IOS_MODULES[@]}"; do
@@ -117,7 +118,7 @@ dotnet restore "$ROOT_DIR/Datadog.MAUI.sln" -v minimal 2>&1 | grep -v "warning N
 echo -e "\n${CYAN}[4/5] Building projects...${NC}"
 
 # Build iOS binding meta-package (if available)
-if [ "$(uname)" = "Darwin" ] && [ -d "$ROOT_DIR/Datadog.MAUI.iOS.Binding/DatadogCore.xcframework" ]; then
+if [ "$(uname)" = "Darwin" ] && [ -d "$ROOT_DIR/Datadog.MAUI.iOS.Binding/artifacts/DatadogCore.xcframework" ]; then
     echo -e "${GREEN}Building iOS binding meta-package...${NC}"
     dotnet build "$ROOT_DIR/Datadog.MAUI.iOS.Binding/Datadog.MAUI.iOS.Binding.csproj" -c "$CONFIGURATION" -v minimal 2>&1 | grep -v "warning\|Xamarin" || true
 elif [ "$(uname)" = "Darwin" ]; then

@@ -36,7 +36,6 @@
       <SmartLink>True</SmartLink>
       <ForceLoad>True</ForceLoad>
       <LinkWithSwiftSystemLibraries>True</LinkWithSwiftSystemLibraries>
-      <!-- Swift class stub linker flags are provided via Datadog.MAUI.targets (buildTransitive) -->
     </NativeReference>
   </ItemGroup>
 </Project>

@@ -21,6 +21,11 @@
 
     <!-- Optional: avoid warnings about missing lib/ files -->
     <NoWarn>$(NoWarn);NU5128</NoWarn>
+
+    <!-- Meta-package has no source files; disable default CS glob to prevent
+         picking up generated AssemblyInfo.cs files from sub-project obj/ dirs -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
   <!-- Version for the dependency set -->
