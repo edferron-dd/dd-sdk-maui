@@ -237,4 +237,14 @@ interface DDWrapperSessionReplay
     [Static]
     [Export("enableWithSampleRate:privacyLevel:")]
     void Enable(float sampleRate, string privacyLevel);
+
+    /// <summary>
+    /// Granular privacy control with individual levels for text/input, image, and touch.
+    /// textAndInputPrivacy: DDTextAndInputPrivacyLevel raw value (0=maskSensitiveInputs, 1=maskAllInputs, 2=maskAll)
+    /// imagePrivacy:        DDImagePrivacyLevel raw value (0=maskNonBundledOnly, 1=maskAll, 2=maskNone)
+    /// touchPrivacy:        DDTouchPrivacyLevel raw value (0=show, 1=hide)
+    /// </summary>
+    [Static]
+    [Export("enableWithSampleRate:textAndInputPrivacy:imagePrivacy:touchPrivacy:startRecordingImmediately:")]
+    void Enable(float sampleRate, nint textAndInputPrivacy, nint imagePrivacy, nint touchPrivacy, bool startRecordingImmediately);
 }
