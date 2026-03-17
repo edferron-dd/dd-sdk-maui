@@ -14,12 +14,63 @@ This SDK enables you to integrate Datadog's Real User Monitoring (RUM), APM Trac
 
 ## Documentation
 
-- [Getting Started](GETTING_STARTED.md) - Setup and development guide
-- [Project Overview](PROJECT_OVERVIEW.md) - Architecture and technical details
-- [Project Summary](PROJECT_SUMMARY.md) - Quick project scaffolding overview
-- [Workflow Architecture](WORKFLOW_ARCHITECTURE.md) - CI/CD pipeline and build workflows
-- [Android Dependency Management](ANDROID_DEPENDENCY_MANAGEMENT.md) - How Android bindings handle dependencies
-- [Dependency Quick Reference](DEPENDENCY_QUICK_REFERENCE.md) - Quick lookup for dependency handling
-- [Automation Roadmap](AUTOMATION_ROADMAP.md) - Future automation plans
-- [Contributing](CONTRIBUTING.md) - How to contribute to this project
-- [Changelog](CHANGELOG.md) - Release history and notable changes
+### [Getting Started](getting-started/index.html)
+
+Everything you need to start using or developing the Datadog MAUI SDK:
+- **[Installation & Setup](getting-started/installation)** - For SDK users
+- **[Developer Setup](getting-started/developer-guide)** - For SDK contributors
+- **[API Reference](getting-started/api-reference)** - Cross-platform API documentation
+
+### [Architecture](architecture/index.html)
+
+Understand the internal structure and build system:
+- **[Workflow Architecture](architecture/workflows)** - CI/CD pipelines
+- **[Packaging](architecture/packaging)** - NuGet package structure
+- **[Scripts](architecture/scripts)** - Build automation
+
+### [Guides](guides/index.html)
+
+Platform-specific and user guides:
+
+#### Android Development
+- **[Android Dependencies](guides/android/dependencies)** - Complete dependency management
+- **[Integration Packages](guides/android/integrations)** - Optional modules
+
+#### iOS Development
+- **[iOS Binding Strategy](guides/ios/binding-strategy)** - Binding approach
+- **[API Identification](guides/ios/api-identification)** - Methodology
+- **[RUM Example](guides/ios/rum-example)** - Concrete example
+
+#### User Guides
+- **[Mapping File Uploads](guides/user/mapping-files)** - ProGuard/R8 and NDK symbols
+
+### [Project](project/index.html)
+
+Project information and contribution guidelines:
+- **[Project Guide](project/overview)** - Complete project overview
+- **[Contributing](project/contributing)** - How to contribute
+- **[Changelog](project/changelog)** - Release history
+- **[Roadmap](project/roadmap)** - Future plans
+
+## Quick Links
+
+**For SDK Users:**
+- [Install the SDK](getting-started/installation#installation)
+- [Initialize Datadog](getting-started/installation#initialization)
+- [Upload Mapping Files](guides/user/mapping-files)
+
+**For SDK Developers:**
+- [Developer Setup](getting-started/developer-guide#first-time-setup)
+- [Build the SDK](architecture/scripts)
+- [Contribute](project/contributing)
+
+**Platform-Specific:**
+- [Android Dependencies](guides/android/dependencies)
+- [iOS Binding Strategy](guides/ios/binding-strategy)
+
+## Getting Help
+
+- Review the [Getting Started guide](getting-started/installation)
+- Check platform-specific guides ([Android](guides/android/index.html) / [iOS](guides/ios/index.html))
+- Read the [Project Guide](project/overview) for architecture details
+- See [Contributing guidelines](project/contributing) to get involved

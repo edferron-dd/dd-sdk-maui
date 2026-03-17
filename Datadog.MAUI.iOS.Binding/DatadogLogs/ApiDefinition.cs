@@ -1,9 +1,8 @@
 using System;
-using System;
 using Foundation;
 using ObjCRuntime;
 
-namespace Datadog.iOS.DatadogLogs
+namespace Datadog.iOS.Logs
 {
 	// NOTE: DDLogEvent has been removed. It is a Swift class stub (__objc_stublist)
 	// that dyld cannot resolve at launch. Log event mapping goes through

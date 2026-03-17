@@ -19,10 +19,6 @@
     <Title>Datadog SDK for .NET MAUI</Title>
     <Description>Unofficial Datadog SDK for .NET MAUI applications. Provides Real User Monitoring (RUM), Log Collection, APM Tracing, Session Replay, and more for iOS and Android platforms.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-
-    <!-- Ensure plugin package version matches your binding set version -->
-    <DatadogSdkVersion Condition="'$(DatadogSdkVersion)' == ''">3.8.1</DatadogSdkVersion>
-    <Version>$(DatadogSdkVersion)</Version>
   </PropertyGroup>
 
   <!-- Android Binding project references for testing (temporary) -->
@@ -57,7 +53,7 @@
 
   <!-- Package README -->
   <ItemGroup>
-    <None Include="../README.md" Pack="true" PackagePath="\" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <!-- Ship the AndroidX duplicate class fix .targets file with the NuGet package.
        buildTransitive: imported by ALL consumers (direct and transitive)

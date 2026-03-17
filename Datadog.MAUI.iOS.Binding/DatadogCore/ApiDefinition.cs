@@ -1,7 +1,9 @@
 using Foundation;
 using ObjCRuntime;
+using UIKit;
+using Datadog.iOS.Internal;
 
-namespace Datadog.iOS.DatadogCore
+namespace Datadog.iOS.Core
 {
 	//
 	// NOTE: All types from DatadogCore have been intentionally removed.

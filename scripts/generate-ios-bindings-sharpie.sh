@@ -34,8 +34,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 ARTIFACTS_DIR="$PROJECT_ROOT/Datadog.MAUI.iOS.Binding/artifacts"
-OUTPUT_DIR="$PROJECT_ROOT/Datadog.MAUI.iOS.Binding/Generated"
-LOG_FILE="$OUTPUT_DIR/binding-warnings.log"
+BINDINGS_DIR="$PROJECT_ROOT/Datadog.MAUI.iOS.Binding"
+PLATFORM_DIR="ios-arm64_x86_64-simulator"  # Use simulator architecture for Sharpie compatibility
 
 # ---------------------------------------------------------------------------
 # Platform directory preference order
@@ -101,46 +101,29 @@ if [ -z "$SDK" ]; then
     exit 1
 fi
 
-echo -e "${GREEN}Using iOS SDK: $SDK${NC}"
+# Automatically discover all XCFrameworks in the artifacts directory
+echo -e "${CYAN}Discovering XCFrameworks in $ARTIFACTS_DIR...${NC}"
+FRAMEWORKS=()
+if [ -d "$ARTIFACTS_DIR" ]; then
+    while IFS= read -r -d '' xcframework; do
+        # Extract framework name (remove .xcframework extension)
+        framework_name=$(basename "$xcframework" .xcframework)
+        FRAMEWORKS+=("$framework_name")
+        echo -e "  ${GREEN}Found:${NC} $framework_name"
+    done < <(find "$ARTIFACTS_DIR" -maxdepth 1 -name "*.xcframework" -type d -print0 | sort -z)
+else
+    echo -e "${RED}Error: Artifacts directory not found: $ARTIFACTS_DIR${NC}"
+    exit 1
+fi
 
-# ---------------------------------------------------------------------------
-# Frameworks to bind
-# ---------------------------------------------------------------------------
-FRAMEWORKS=(
-    "DatadogCore"
-    "DatadogInternal"
-    "DatadogRUM"
-    "DatadogLogs"
-    "DatadogTrace"
-    "DatadogCrashReporting"
-    "DatadogSessionReplay"
-    "DatadogWebViewTracking"
-    "DatadogFlags"
-    "OpenTelemetryApi"
-)
+if [ ${#FRAMEWORKS[@]} -eq 0 ]; then
+    echo -e "${RED}Error: No XCFrameworks found in $ARTIFACTS_DIR${NC}"
+    echo -e "${YELLOW}Run 'make download-ios-frameworks' first to download the frameworks${NC}"
+    exit 1
+fi
 
-# ---------------------------------------------------------------------------
-# Prepare output
-# ---------------------------------------------------------------------------
-rm -rf "$OUTPUT_DIR"
-mkdir -p "$OUTPUT_DIR"
-echo "# Binding Generation Warnings" > "$LOG_FILE"
-echo "# Generated on $(date)" >> "$LOG_FILE"
-echo "# Xcode: $(xcodebuild -version 2>/dev/null | head -1)" >> "$LOG_FILE"
-echo "# SDK: $SDK" >> "$LOG_FILE"
-echo "# Sharpie: $(sharpie -v)" >> "$LOG_FILE"
-echo "" >> "$LOG_FILE"
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# Process each framework
-# ---------------------------------------------------------------------------
-TOTAL=${#FRAMEWORKS[@]}
-CURRENT=0
-SUCCESSFUL=0
-SKIPPED=0
-FAILED=0
+echo -e "${GREEN}Found ${#FRAMEWORKS[@]} XCFrameworks to process${NC}"
+echo -e "${CYAN}Using iOS SDK: $SDK${NC}\n"
 
 for FRAMEWORK in "${FRAMEWORKS[@]}"; do
     ((CURRENT++))
@@ -191,47 +174,50 @@ for FRAMEWORK in "${FRAMEWORKS[@]}"; do
         continue
     fi
 
-    echo -e "  Header: $FRAMEWORK-Swift.h"
-    echo -e "  Slice:  $(basename "$(dirname "$FRAMEWORK_PATH")")"
+    # Determine binding project directory name
+    BINDING_PROJECT_DIR="$BINDINGS_DIR/$FRAMEWORK"
 
-    # --- Run Objective Sharpie -------------------------------------------
-    FRAMEWORK_OUTPUT="$OUTPUT_DIR/$FRAMEWORK"
-    mkdir -p "$FRAMEWORK_OUTPUT"
+    # Check if binding project directory exists
+    if [ ! -d "$BINDING_PROJECT_DIR" ]; then
+        echo -e "${RED}  ✗ Binding project directory not found: $BINDING_PROJECT_DIR${NC}"
+        echo -e "${YELLOW}  ⚠ Skipping $FRAMEWORK (project doesn't exist)${NC}"
+        continue
+    fi
 
-    SHARPIE_LOG="$FRAMEWORK_OUTPUT/sharpie.log"
+    # Strip "Datadog" prefix from framework name for cleaner C# namespaces
+    # Examples: DatadogCore → Core, DatadogRUM → RUM, OpenTelemetryApi → OpenTelemetryApi
+    if [[ "$FRAMEWORK" == Datadog* ]]; then
+        NAMESPACE_SUFFIX="${FRAMEWORK#Datadog}"
+    else
+        NAMESPACE_SUFFIX="$FRAMEWORK"
+    fi
 
-    if sharpie bind \
-        --output="$FRAMEWORK_OUTPUT" \
-        --namespace="Datadog.iOS.$FRAMEWORK" \
+    # Create temporary directory for Sharpie output
+    TEMP_OUTPUT="/tmp/sharpie-$FRAMEWORK-$$"
+    mkdir -p "$TEMP_OUTPUT"
+
+    # Run Objective Sharpie
+    echo -e "  Generating bindings with namespace: Datadog.iOS.$NAMESPACE_SUFFIX"
+    sharpie bind \
+        --output="$TEMP_OUTPUT" \
+        --namespace="Datadog.iOS.$NAMESPACE_SUFFIX" \
         --sdk="$SDK" \
         -scope "$HEADERS_PATH" \
-        "$SWIFT_HEADER" > "$SHARPIE_LOG" 2>&1; then
-        SHARPIE_EXIT=0
+        "$HEADER_TO_BIND" \
+        2>&1 | grep -v "warning:" || true
+
+    # Copy generated files to binding project directory
+    if [ -f "$TEMP_OUTPUT/ApiDefinitions.cs" ]; then
+        # Rename ApiDefinitions.cs to ApiDefinition.cs (singular)
+        cp "$TEMP_OUTPUT/ApiDefinitions.cs" "$BINDING_PROJECT_DIR/ApiDefinition.cs"
+        echo -e "${GREEN}  ✓ Generated ApiDefinition.cs → $BINDING_PROJECT_DIR/ApiDefinition.cs${NC}"
     else
         SHARPIE_EXIT=$?
     fi
 
-    # Count Sharpie warnings/errors
-    WARN_COUNT=$(grep -c "warning:" "$SHARPIE_LOG" 2>/dev/null || true)
-    WARN_COUNT=${WARN_COUNT:-0}
-    ERR_COUNT=$(grep -c "error:" "$SHARPIE_LOG" 2>/dev/null || true)
-    ERR_COUNT=${ERR_COUNT:-0}
-
-    if [ -f "$FRAMEWORK_OUTPUT/ApiDefinitions.cs" ]; then
-        API_LINES=$(wc -l < "$FRAMEWORK_OUTPUT/ApiDefinitions.cs" | tr -d ' ')
-        echo -e "${GREEN}  ✓ ApiDefinitions.cs ($API_LINES lines)${NC}"
-
-        if [ -f "$FRAMEWORK_OUTPUT/StructsAndEnums.cs" ]; then
-            SE_LINES=$(wc -l < "$FRAMEWORK_OUTPUT/StructsAndEnums.cs" | tr -d ' ')
-            echo -e "${GREEN}  ✓ StructsAndEnums.cs ($SE_LINES lines)${NC}"
-        fi
-
-        if [ "$WARN_COUNT" -gt 0 ]; then
-            echo -e "${YELLOW}  ⚠ $WARN_COUNT Sharpie warning(s) — see $SHARPIE_LOG${NC}"
-            echo "WARNING: $FRAMEWORK: Sharpie produced $WARN_COUNT warning(s)" >> "$LOG_FILE"
-        fi
-
-        ((SUCCESSFUL++))
+    if [ -f "$TEMP_OUTPUT/StructsAndEnums.cs" ]; then
+        cp "$TEMP_OUTPUT/StructsAndEnums.cs" "$BINDING_PROJECT_DIR/StructsAndEnums.cs"
+        echo -e "${GREEN}  ✓ Generated StructsAndEnums.cs → $BINDING_PROJECT_DIR/StructsAndEnums.cs${NC}"
     else
         MSG="$FRAMEWORK: Sharpie did not produce ApiDefinitions.cs (exit=$SHARPIE_EXIT, errors=$ERR_COUNT)"
         echo -e "${RED}  ✗ $MSG${NC}"
@@ -240,36 +226,19 @@ for FRAMEWORK in "${FRAMEWORKS[@]}"; do
         ((FAILED++))
     fi
 
+    # Clean up temporary directory
+    rm -rf "$TEMP_OUTPUT"
+
     echo ""
 done
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-echo -e "${CYAN}========================================${NC}"
-echo -e "${CYAN}Summary${NC}"
-echo -e "${CYAN}========================================${NC}"
-echo -e "${GREEN}  Successful: $SUCCESSFUL${NC}"
-echo -e "${YELLOW}  Skipped:    $SKIPPED (missing Swift headers — see warnings log)${NC}"
-echo -e "${RED}  Failed:     $FAILED${NC}"
-echo -e "${CYAN}  Total:      $TOTAL${NC}"
+echo -e "${GREEN}Binding generation complete!${NC}"
+echo -e "${CYAN}Generated bindings have been written directly to binding project directories${NC}"
 echo ""
-echo -e "${CYAN}Output:   $OUTPUT_DIR${NC}"
-echo -e "${CYAN}Warnings: $LOG_FILE${NC}"
-
-if [ "$SKIPPED" -gt 0 ] || [ "$FAILED" -gt 0 ]; then
-    echo ""
-    echo -e "${YELLOW}Warnings & errors:${NC}"
-    grep -E "^(WARNING|ERROR):" "$LOG_FILE" | while IFS= read -r line; do
-        echo "  $line"
-    done
-fi
-
-echo ""
-echo -e "${CYAN}Next steps:${NC}"
-echo "1. Review generated files in $OUTPUT_DIR/"
+echo -e "${YELLOW}Next steps:${NC}"
+echo "1. Review the generated ApiDefinition.cs and StructsAndEnums.cs files in each binding project"
 echo "2. Look for [Verify] attributes that need manual attention"
-echo "3. Copy bindings into per-framework ApiDefinition.cs files"
-echo "4. Build: dotnet build Datadog.MAUI.iOS.Binding/"
-
-exit 0
+echo "3. Test the bindings by building the projects"
+echo "4. Commit the changes if everything looks good"
+echo "4. Consolidate enums/structs into Datadog.MAUI.iOS.Binding/StructsAndEnums.cs"
+echo "5. Build the iOS binding project: dotnet build Datadog.MAUI.iOS.Binding/Datadog.MAUI.iOS.Binding.csproj"

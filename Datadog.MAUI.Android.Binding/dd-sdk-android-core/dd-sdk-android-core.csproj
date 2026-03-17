@@ -7,12 +7,13 @@
     <IsBindingProject>true</IsBindingProject>
 
     <PackageId>Datadog.MAUI.Android.Core</PackageId>
-    <RootNamespace>Datadog.MAUI.Android.Core</RootNamespace>
+    <RootNamespace>Datadog.Android.Core</RootNamespace>
     <Authors>Datadog</Authors>
     <Description>.NET bindings for Datadog Android SDK Core module</Description>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/DataDog/dd-sdk-maui</RepositoryUrl>
     <PackageTags>.NET MAUI Android Datadog Mobile Binding</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,9 +24,8 @@
     <AndroidMavenLibrary Include="com.datadoghq:dd-sdk-android-core" Version="$(DatadogAndroidMavenVersion)" VerifyDependencies="false" />
     <AndroidMavenLibrary Include="com.squareup.okhttp3:okhttp" Version="4.12.0" Bind="false" VerifyDependencies="false" />
     <AndroidMavenLibrary Include="com.lyft.kronos:kronos-android" Version="$(KronosVersion)" Bind="false" VerifyDependencies="false" />
-    <AndroidMavenLibrary Include="com.datadoghq:dd-sdk-android-internal" Version="$(DatadogAndroidMavenVersion)" Bind="false" VerifyDependencies="false" />
-    <AndroidMavenLibrary Include="com.squareup.okio:okio" Version="3.6.0" Bind="false" VerifyDependencies="false" />
-    <AndroidMavenLibrary Include="com.squareup.okio:okio-jvm" Version="3.6.0" Bind="false" VerifyDependencies="false" />
+    <AndroidMavenLibrary Include="com.squareup.okio:okio" Version="$(SquareupOkioVersion)" Bind="false" VerifyDependencies="false" />
+    <AndroidMavenLibrary Include="com.squareup.okio:okio-jvm" Version="$(SquareupOkioVersion)" Bind="false" VerifyDependencies="false" />
     <AndroidMavenLibrary Include="com.lyft.kronos:kronos-java" Version="$(KronosVersion)" Bind="false" VerifyDependencies="false" />
   </ItemGroup>
 
@@ -38,5 +38,10 @@
   <!-- Metadata transforms for binding fixes -->
   <ItemGroup>
     <TransformFile Include="Transforms\Metadata.xml" />
+  </ItemGroup>
+
+  <!-- Package README -->
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

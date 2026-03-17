@@ -1,9 +1,24 @@
-using DatadogWrapper;
+using Datadog.iOS.Trace;
+using Foundation;
 
 namespace Datadog.Maui.Tracing;
 
 public static partial class Tracer
 {
+    private static DDTracer? _nativeTracer;
+
+    private static DDTracer NativeTracer
+    {
+        get
+        {
+            if (_nativeTracer == null)
+            {
+                _nativeTracer = DDTracer.Shared;
+            }
+            return _nativeTracer ?? throw new InvalidOperationException("Failed to initialize Datadog tracer");
+        }
+    }
+
     private static partial ISpan PlatformStartSpan(string operationName, ISpan? parent, DateTimeOffset? startTime)
     {
         string? parentSpanId = parent is Platforms.iOS.IOSSpan iosParent ? iosParent.NativeSpanId : null;

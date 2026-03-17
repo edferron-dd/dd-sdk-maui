@@ -6,23 +6,32 @@ on:
     paths:
       - 'Datadog.MAUI.Android.Binding/**'
       - 'Datadog.MAUI.iOS.Binding/**'
+      - 'Datadog.MAUI.Plugin/**'
       - 'samples/**'
       - 'scripts/**'
       - 'Directory.Build.props'
-      - '.github/workflows/**'
+      - '.github/workflows/build-all.yml'
+      - '.github/workflows/build-android.yml'
+      - '.github/workflows/build-ios.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'Datadog.MAUI.Android.Binding/**'
       - 'Datadog.MAUI.iOS.Binding/**'
+      - 'Datadog.MAUI.Plugin/**'
       - 'samples/**'
       - 'scripts/**'
       - 'Directory.Build.props'
-      - '.github/workflows/**'
+      - '.github/workflows/build-all.yml'
+      - '.github/workflows/build-android.yml'
+      - '.github/workflows/build-ios.yml'
   workflow_dispatch:  # Allow manual triggering
   schedule:
     # Run weekly on Monday at 9 AM UTC
     - cron: '0 9 * * 1'
+
+env:
+  XCODE_VERSION: '26.2'  # Must be one of https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md#xcode
 
 jobs:
   # Verify SDK versions and alignment before building
@@ -134,80 +143,380 @@ jobs:
     with:
       sdk-version: ${{ needs.verify-sdk-versions.outputs.sdk-version }}
 
+  # Build unified Datadog.MAUI plugin package
+  build-plugin:
+    name: Build Datadog.MAUI Plugin
+    runs-on: macos-latest
+    needs: [build-android, build-ios, verify-sdk-versions]
+    if: needs.build-android.result == 'success' && needs.build-ios.result == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Cache plugin package
+        id: cache-plugin
+        uses: actions/cache@v5
+        with:
+          path: ./artifacts/plugin
+          key: ${{ runner.os }}-plugin-package-${{ needs.verify-sdk-versions.outputs.sdk-version }}-${{ hashFiles('Datadog.MAUI.Plugin/**/*.csproj', 'Datadog.MAUI.Plugin/**/*.cs') }}
+          restore-keys: |
+            ${{ runner.os }}-plugin-package-${{ needs.verify-sdk-versions.outputs.sdk-version }}-
+
+      - name: Setup .NET SDK 10
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install .NET workloads
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        run: dotnet workload install maui
+
+      - name: Download Android packages
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: android-nuget-packages
+          path: ./artifacts/android
+
+      - name: Download iOS packages
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: ios-nuget-packages
+          path: ./artifacts/ios
+
+      - name: Download iOS XCFrameworks
+        id: download-ios-xcframeworks
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: ios-xcframeworks
+          path: Datadog.MAUI.iOS.Binding/artifacts/
+
+      - name: Setup local NuGet source
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        run: |
+          # Create a local NuGet source with all built packages
+          mkdir -p ./artifacts/all
+          cp -r ./artifacts/android/*.nupkg ./artifacts/all/ 2>/dev/null || true
+          cp -r ./artifacts/ios/*.nupkg ./artifacts/all/ 2>/dev/null || true
+
+          # Add local source
+          dotnet nuget add source ./artifacts/all --name LocalArtifacts || true
+
+      - name: Restore plugin dependencies (iOS + Android)
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        run: dotnet restore Datadog.MAUI.Plugin/Datadog.MAUI.Plugin.csproj
+
+      - name: Build plugin (iOS + Android)
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        run: dotnet build Datadog.MAUI.Plugin/Datadog.MAUI.Plugin.csproj --configuration Release --no-restore
+
+      - name: Pack plugin (iOS + Android)
+        if: steps.cache-plugin.outputs.cache-hit != 'true'
+        run: dotnet pack Datadog.MAUI.Plugin/Datadog.MAUI.Plugin.csproj --configuration Release --no-build --output ./artifacts/plugin
+
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v6
+        with:
+          name: datadog-maui-plugin
+          path: ./artifacts/plugin/*.nupkg
+          retention-days: 30
+
+      - name: Plugin build summary
+        run: |
+          echo "## Datadog.MAUI Plugin Package" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Plugin package built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: Datadog.MAUI.${{ needs.verify-sdk-versions.outputs.sdk-version }}.nupkg" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform Support**: iOS + Android (full support)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This package provides a unified C# API over Android and iOS bindings." >> $GITHUB_STEP_SUMMARY
+
+  # Build sample apps in parallel for faster feedback
+  build-sample-android:
+    name: Build Sample (Android)
+    runs-on: ubuntu-latest  # Cheaper and faster for Android
+    needs: build-plugin
+    if: needs.build-plugin.result == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache .NET workloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.dotnet/sdk-manifests
+            ~/.dotnet/metadata/workloads
+            ~/.dotnet/packs
+          key: ${{ runner.os }}-dotnet-workload-maui-android-${{ hashFiles('**/global.json', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-dotnet-workload-maui-android-
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      - name: Download Android packages
+        uses: actions/download-artifact@v7
+        with:
+          name: android-nuget-packages
+          path: ./artifacts
+
+      - name: Download iOS packages
+        uses: actions/download-artifact@v7
+        with:
+          name: ios-nuget-packages
+          path: ./artifacts
+
+      - name: Download plugin package
+        uses: actions/download-artifact@v7
+        with:
+          name: datadog-maui-plugin
+          path: ./artifacts
+
+      - name: Verify artifacts
+        run: |
+          echo "Packages available for Android build:"
+          ls -lh ./artifacts/*.nupkg
+
+      - name: Setup local NuGet source
+        run: |
+          # Create nuget.config in sample directory with local source
+          cat > samples/DatadogMauiSample/nuget.config << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="LocalArtifacts" value="../../artifacts" />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            </packageSources>
+          </configuration>
+          EOF
+
+      - name: Restore sample app (Android)
+        env:
+          DD_RUM_ANDROID_CLIENT_TOKEN: ${{ secrets.DD_RUM_ANDROID_CLIENT_TOKEN }}
+          DD_RUM_ANDROID_APPLICATION_ID: ${{ secrets.DD_RUM_ANDROID_APPLICATION_ID }}
+        run: |
+          echo "Restoring sample app dependencies (Android only)..."
+          cd samples/DatadogMauiSample
+          dotnet restore DatadogMauiSample.csproj -p:TargetFramework=net10.0-android --configfile nuget.config -p:Configuration=Release
+
+      - name: Build sample app (Android)
+        env:
+          DD_RUM_ANDROID_CLIENT_TOKEN: ${{ secrets.DD_RUM_ANDROID_CLIENT_TOKEN }}
+          DD_RUM_ANDROID_APPLICATION_ID: ${{ secrets.DD_RUM_ANDROID_APPLICATION_ID }}
+        run: |
+          cd samples/DatadogMauiSample
+          echo "Building Android (net10.0-android)..."
+          dotnet build DatadogMauiSample.csproj -p:TargetFramework=net10.0-android -c Release --no-restore -v minimal
+
+      - name: Upload Android sample APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-sample-apk
+          path: samples/DatadogMauiSample/bin/Release/**/*.apk
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Build summary
+        run: |
+          echo "## Android Sample App Build" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Android sample app built successfully" >> $GITHUB_STEP_SUMMARY
+
+  build-sample-ios:
+    name: Build Sample (iOS)
+    runs-on: macos-latest  # Required for iOS/Xcode
+    needs: build-plugin
+    if: needs.build-plugin.result == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache .NET workloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.dotnet/sdk-manifests
+            ~/.dotnet/metadata/workloads
+            ~/.dotnet/packs
+          key: ${{ runner.os }}-dotnet-workload-maui-ios-${{ hashFiles('**/global.json', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-dotnet-workload-maui-ios-
+
+      - name: Install MAUI iOS workload
+        run: dotnet workload install maui-ios
+
+      - name: Download Android packages
+        uses: actions/download-artifact@v7
+        with:
+          name: android-nuget-packages
+          path: ./artifacts
+
+      - name: Download iOS packages
+        uses: actions/download-artifact@v7
+        with:
+          name: ios-nuget-packages
+          path: ./artifacts
+
+      - name: Download plugin package
+        uses: actions/download-artifact@v7
+        with:
+          name: datadog-maui-plugin
+          path: ./artifacts
+
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Verify artifacts
+        run: |
+          echo "Packages available for iOS build:"
+          ls -lh ./artifacts/*.nupkg
+
+      - name: Setup local NuGet source
+        run: |
+          # Create nuget.config in sample directory with local source
+          cat > samples/DatadogMauiSample/nuget.config << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="LocalArtifacts" value="../../artifacts" />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            </packageSources>
+          </configuration>
+          EOF
+
+      - name: Restore sample app (iOS)
+        env:
+          DD_RUM_IOS_CLIENT_TOKEN: ${{ secrets.DD_RUM_IOS_CLIENT_TOKEN }}
+          DD_RUM_IOS_APPLICATION_ID: ${{ secrets.DD_RUM_IOS_APPLICATION_ID }}
+        run: |
+          echo "Restoring sample app dependencies (iOS only)..."
+          cd samples/DatadogMauiSample
+          dotnet restore DatadogMauiSample.csproj -p:TargetFramework=net10.0-ios --configfile nuget.config -p:Configuration=Release
+
+      - name: Build sample app (iOS)
+        env:
+          DD_RUM_IOS_CLIENT_TOKEN: ${{ secrets.DD_RUM_IOS_CLIENT_TOKEN }}
+          DD_RUM_IOS_APPLICATION_ID: ${{ secrets.DD_RUM_IOS_APPLICATION_ID }}
+        run: |
+          cd samples/DatadogMauiSample
+          echo "Building iOS (net10.0-ios)..."
+          dotnet build DatadogMauiSample.csproj -p:TargetFramework=net10.0-ios -c Release --no-restore -v minimal
+
+      - name: Upload iOS sample app
+        uses: actions/upload-artifact@v6
+        with:
+          name: ios-sample-app
+          path: |
+            samples/DatadogMauiSample/bin/Release/**/*.app
+            samples/DatadogMauiSample/bin/Release/**/*.ipa
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Build summary
+        run: |
+          echo "## iOS Sample App Build" >> $GITHUB_STEP_SUMMARY
+          echo "✅ iOS sample app built successfully" >> $GITHUB_STEP_SUMMARY
+
+      - name: Sample apps summary
+        run: |
+          echo "## Sample Apps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Android and iOS sample apps built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Built with unified Datadog.MAUI.${{ needs.verify-sdk-versions.outputs.sdk-version }}" >> $GITHUB_STEP_SUMMARY
+
   # Validate all builds completed successfully
   validate-builds:
     name: Validate All Builds
     runs-on: ubuntu-latest
-    needs: [build-android, build-ios]
+    needs: [build-plugin, build-sample-android, build-sample-ios]
     if: always()  # Run even if some builds failed
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Check Android build status
-        id: check-android
+      - name: Check plugin build status
+        id: check-plugin
         run: |
-          if [ "${{ needs.build-android.result }}" == "success" ]; then
-            echo "android_success=true" >> $GITHUB_OUTPUT
-            echo "Android builds succeeded"
+          if [ "${{ needs.build-plugin.result }}" == "success" ]; then
+            echo "plugin_success=true" >> $GITHUB_OUTPUT
+            echo "✅ Plugin build succeeded"
           else
-            echo "android_success=false" >> $GITHUB_OUTPUT
-            echo "Android builds failed or were skipped"
+            echo "plugin_success=false" >> $GITHUB_OUTPUT
+            echo "❌ Plugin build failed"
           fi
 
-      - name: Check iOS build status
-        id: check-ios
+      - name: Check sample apps build status
+        id: check-samples
         run: |
-          if [ "${{ needs.build-ios.result }}" == "success" ]; then
-            echo "ios_success=true" >> $GITHUB_OUTPUT
-            echo "iOS builds succeeded"
+          ANDROID_RESULT="${{ needs.build-sample-android.result }}"
+          IOS_RESULT="${{ needs.build-sample-ios.result }}"
+
+          if [ "$ANDROID_RESULT" == "success" ] && [ "$IOS_RESULT" == "success" ]; then
+            echo "samples_success=true" >> $GITHUB_OUTPUT
+            echo "✅ Sample apps build succeeded (Android + iOS)"
+          elif [ "$ANDROID_RESULT" == "success" ] && [ "$IOS_RESULT" != "success" ]; then
+            echo "samples_success=partial" >> $GITHUB_OUTPUT
+            echo "⚠️  Sample apps build partially succeeded (Android only)"
+          elif [ "$ANDROID_RESULT" != "success" ] && [ "$IOS_RESULT" == "success" ]; then
+            echo "samples_success=partial" >> $GITHUB_OUTPUT
+            echo "⚠️  Sample apps build partially succeeded (iOS only)"
           else
-            echo "ios_success=false" >> $GITHUB_OUTPUT
-            echo "iOS builds failed or were skipped (bindings incomplete)"
+            echo "samples_success=false" >> $GITHUB_OUTPUT
+            echo "❌ Sample apps build failed or skipped (both platforms)"
           fi
 
-      - name: Download Android artifacts
-        if: needs.build-android.result == 'success'
+      - name: Download plugin package
+        if: needs.build-plugin.result == 'success'
+        uses: actions/download-artifact@v7
+        with:
+          name: datadog-maui-plugin
+          path: ./artifacts
+        continue-on-error: true
+
+      - name: Download Android packages
         uses: actions/download-artifact@v7
         with:
           name: android-nuget-packages
-          path: ./artifacts/android
+          path: ./artifacts
         continue-on-error: true
 
-      - name: Download iOS artifacts
-        if: needs.build-ios.result == 'success'
+      - name: Download iOS packages
         uses: actions/download-artifact@v7
         with:
           name: ios-nuget-packages
-          path: ./artifacts/ios
+          path: ./artifacts
         continue-on-error: true
 
       - name: List all packages
         run: |
-          echo "=== Android Packages ==="
-          if [ -d "./artifacts/android" ]; then
-            ls -lh ./artifacts/android/ || echo "No Android packages found"
-            ANDROID_COUNT=$(ls -1 ./artifacts/android/*.nupkg 2>/dev/null | wc -l || echo "0")
+          echo "=== All Packages ==="
+          if [ -d "./artifacts" ]; then
+            ls -lh ./artifacts/*.nupkg 2>/dev/null || echo "No packages found"
           else
-            echo "Android artifacts directory not found"
-            ANDROID_COUNT=0
+            echo "Artifacts directory not found"
           fi
-
-          echo ""
-          echo "=== iOS Packages ==="
-          if [ -d "./artifacts/ios" ]; then
-            ls -lh ./artifacts/ios/ || echo "No iOS packages found"
-            IOS_COUNT=$(ls -1 ./artifacts/ios/*.nupkg 2>/dev/null | wc -l || echo "0")
-          else
-            echo "iOS artifacts directory not found"
-            IOS_COUNT=0
-          fi
-
-          echo ""
-          echo "=== Package Count ==="
-          echo "Android: $ANDROID_COUNT packages"
-          echo "iOS: $IOS_COUNT packages"
 
       - name: Verify package versions
         run: |
@@ -241,44 +550,53 @@ jobs:
           echo "## Build Status" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.check-android.outputs.android_success }}" == "true" ]; then
-            echo "- ✅ **Android**: All modules built successfully" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check-plugin.outputs.plugin_success }}" == "true" ]; then
+            echo "- ✅ **Plugin**: Built successfully" >> $GITHUB_STEP_SUMMARY
           else
-            echo "- ❌ **Android**: Build failed" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ **Plugin**: Build failed" >> $GITHUB_STEP_SUMMARY
           fi
 
-          if [ "${{ steps.check-ios.outputs.ios_success }}" == "true" ]; then
-            echo "- ✅ **iOS**: All modules built successfully" >> $GITHUB_STEP_SUMMARY
+          SAMPLES_STATUS="${{ steps.check-samples.outputs.samples_success }}"
+          ANDROID_RESULT="${{ needs.build-sample-android.result }}"
+          IOS_RESULT="${{ needs.build-sample-ios.result }}"
+
+          if [ "$SAMPLES_STATUS" == "true" ]; then
+            echo "- ✅ **Sample Apps**: Both platforms built successfully" >> $GITHUB_STEP_SUMMARY
+            echo "  - ✅ Android: Built successfully" >> $GITHUB_STEP_SUMMARY
+            echo "  - ✅ iOS: Built successfully" >> $GITHUB_STEP_SUMMARY
+          elif [ "$SAMPLES_STATUS" == "partial" ]; then
+            echo "- ⚠️  **Sample Apps**: Partial success" >> $GITHUB_STEP_SUMMARY
+            if [ "$ANDROID_RESULT" == "success" ]; then
+              echo "  - ✅ Android: Built successfully" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "  - ❌ Android: Build failed or skipped" >> $GITHUB_STEP_SUMMARY
+            fi
+            if [ "$IOS_RESULT" == "success" ]; then
+              echo "  - ✅ iOS: Built successfully" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "  - ❌ iOS: Build failed or skipped" >> $GITHUB_STEP_SUMMARY
+            fi
           else
-            echo "- ⚠️ **iOS**: Builds skipped (bindings not yet complete)" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ **Sample Apps**: Build failed or skipped (both platforms)" >> $GITHUB_STEP_SUMMARY
+            echo "  - ❌ Android: Build failed or skipped" >> $GITHUB_STEP_SUMMARY
+            echo "  - ❌ iOS: Build failed or skipped" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Package Counts
-          echo "## Packages Created" >> $GITHUB_STEP_SUMMARY
+          # All Packages
+          echo "## NuGet Packages" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ -d "./artifacts/android" ]; then
-            ANDROID_COUNT=$(ls -1 ./artifacts/android/*.nupkg 2>/dev/null | wc -l | tr -d ' ')
-            echo "**Android**: $ANDROID_COUNT packages" >> $GITHUB_STEP_SUMMARY
+          if [ -d "./artifacts" ] && ls ./artifacts/*.nupkg >/dev/null 2>&1; then
+            PKG_COUNT=$(ls -1 ./artifacts/*.nupkg 2>/dev/null | wc -l)
+            echo "**Packages Created**: ✅ $PKG_COUNT package(s)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            ls -1 ./artifacts/android/*.nupkg 2>/dev/null | xargs -n1 basename || echo "None"
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Android**: 0 packages" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ -d "./artifacts/ios" ]; then
-            IOS_COUNT=$(ls -1 ./artifacts/ios/*.nupkg 2>/dev/null | wc -l | tr -d ' ')
-            echo "**iOS**: $IOS_COUNT packages" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            ls -1 ./artifacts/ios/*.nupkg 2>/dev/null | xargs -n1 basename || echo "None"
+            ls -1 ./artifacts/*.nupkg 2>/dev/null | xargs -n1 basename | sort >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           else
-            echo "**iOS**: 0 packages (bindings incomplete)" >> $GITHUB_STEP_SUMMARY
+            echo "**Packages**: ❌ Not found" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -295,9 +613,9 @@ jobs:
           echo "*Build triggered by: ${{ github.event_name }}*" >> $GITHUB_STEP_SUMMARY
 
       - name: Fail if critical builds failed
-        if: needs.build-android.result != 'success'
+        if: needs.build-plugin.result != 'success'
         run: |
-          echo "❌ Android builds failed - this is a critical failure"
+          echo "❌ Plugin build failed - this is a critical failure"
           exit 1
 
   # Optional: Create GitHub release (when tagged)
@@ -335,7 +653,32 @@ jobs:
 
       - name: Create release notes
         run: |
-          cat > release-notes.md << 'EOF'
+          # Extract package names from artifacts and categorize them
+          cd ./release-artifacts
+
+          echo "=== Debug: All files in release-artifacts ==="
+          ls -la
+          echo ""
+          echo "=== Debug: All .nupkg files ==="
+          ls -1 *.nupkg 2>/dev/null || echo "No .nupkg files found"
+          echo ""
+
+          # Get all unique package IDs (strip version and .nupkg)
+          # Using sed with extended regex for better version matching
+          PLUGIN_PACKAGES=$(ls Datadog.MAUI.*.nupkg 2>/dev/null | grep -v "Android\|iOS" | sed -E 's/\.[0-9]+\.[0-9]+\.[0-9]+\.nupkg$//' | sort -u)
+          ANDROID_PACKAGES=$(ls Datadog.MAUI.Android.*.nupkg 2>/dev/null | grep -v "\.Binding\." | sed -E 's/\.[0-9]+\.[0-9]+\.[0-9]+\.nupkg$//' | sort -u)
+          IOS_PACKAGES=$(ls Datadog.MAUI.iOS.*.nupkg 2>/dev/null | grep -v "\.Binding\." | sed -E 's/\.[0-9]+\.[0-9]+\.[0-9]+\.nupkg$//' | sort -u)
+          META_PACKAGES=$(ls Datadog.MAUI.*.Binding.*.nupkg 2>/dev/null | sed -E 's/\.[0-9]+\.[0-9]+\.[0-9]+\.nupkg$//' | sort -u)
+
+          echo "=== Debug: Package categories ==="
+          echo "PLUGIN_PACKAGES: $PLUGIN_PACKAGES"
+          echo "ANDROID_PACKAGES: $ANDROID_PACKAGES"
+          echo "IOS_PACKAGES: $IOS_PACKAGES"
+          echo "META_PACKAGES: $META_PACKAGES"
+          echo ""
+
+          # Start building release notes
+          cat > ../release-notes.md << EOF
           # Datadog MAUI SDK ${{ steps.get-version.outputs.version }}
 
           .NET MAUI bindings for Datadog's native iOS and Android Mobile SDKs.
@@ -344,26 +687,50 @@ jobs:
 
           This release includes the following NuGet packages:
 
-          ### Android Bindings - Core & Features
-          - Datadog.MAUI.Android.Core
-          - Datadog.MAUI.Android.Internal
-          - Datadog.MAUI.Android.RUM
-          - Datadog.MAUI.Android.Logs
-          - Datadog.MAUI.Android.Trace
-          - Datadog.MAUI.Android.SessionReplay
-          - Datadog.MAUI.Android.NDK
-          - Datadog.MAUI.Android.WebView
-          - Datadog.MAUI.Android.Flags
+          EOF
 
-          ### Android Bindings - Integrations
-          - Datadog.MAUI.Android.OkHttp
-          - Datadog.MAUI.Android.Trace.OpenTelemetry
-          - Datadog.MAUI.Android.OkHttp.OpenTelemetry
-          - Datadog.MAUI.Android.GradlePlugin
+          # Add Unified Plugin section
+          if [ -n "$PLUGIN_PACKAGES" ]; then
+            echo "### Unified Plugin" >> ../release-notes.md
+            echo "" >> ../release-notes.md
+            for pkg in $PLUGIN_PACKAGES; do
+              echo "- **$pkg** - Cross-platform unified API for both iOS and Android" >> ../release-notes.md
+            done
+            echo "" >> ../release-notes.md
+          fi
 
-          ### iOS Bindings
-          - Datadog.MAUI.iOS.Binding (if available)
+          # Add Android packages
+          if [ -n "$ANDROID_PACKAGES" ]; then
+            echo "### Android Bindings" >> ../release-notes.md
+            echo "" >> ../release-notes.md
+            echo "$ANDROID_PACKAGES" | while read pkg; do
+              echo "- $pkg" >> ../release-notes.md
+            done
+            echo "" >> ../release-notes.md
+          fi
 
+          # Add iOS packages
+          if [ -n "$IOS_PACKAGES" ]; then
+            echo "### iOS Bindings" >> ../release-notes.md
+            echo "" >> ../release-notes.md
+            echo "$IOS_PACKAGES" | while read pkg; do
+              echo "- $pkg" >> ../release-notes.md
+            done
+            echo "" >> ../release-notes.md
+          fi
+
+          # Add Meta-Packages
+          if [ -n "$META_PACKAGES" ]; then
+            echo "### Meta-Packages" >> ../release-notes.md
+            echo "" >> ../release-notes.md
+            echo "$META_PACKAGES" | while read pkg; do
+              echo "- $pkg" >> ../release-notes.md
+            done
+            echo "" >> ../release-notes.md
+          fi
+
+          # Add remaining sections
+          cat >> ../release-notes.md << 'ENDEOF'
           ## Target Frameworks
 
           All packages support:
@@ -372,8 +739,15 @@ jobs:
 
           ## Installation
 
+          For most users, install the unified plugin:
+          ```bash
+          dotnet add package Datadog.MAUI --version ${{ steps.get-version.outputs.version }}
+          ```
+
+          Or install platform-specific bindings:
           ```bash
           dotnet add package Datadog.MAUI.Android.Core --version ${{ steps.get-version.outputs.version }}
+          dotnet add package Datadog.MAUI.iOS.Core --version ${{ steps.get-version.outputs.version }}
           ```
 
           ## Documentation
@@ -383,7 +757,11 @@ jobs:
           ## What's Changed
 
           See [CHANGELOG.md](https://github.com/DataDog/dd-sdk-maui/blob/main/docs/CHANGELOG.md) for detailed changes.
-          EOF
+          ENDEOF
+
+          cd ..
+          echo "=== Generated Release Notes ==="
+          cat release-notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

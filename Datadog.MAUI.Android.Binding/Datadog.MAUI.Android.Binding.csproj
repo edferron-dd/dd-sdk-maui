@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <!-- Meta-package: targets Android frameworks but does NOT produce assemblies -->
     <TargetFrameworks>net9.0-android;net10.0-android</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>true</ImplicitUsings>
@@ -17,15 +18,10 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/DataDog/dd-sdk-maui</RepositoryUrl>
     <PackageTags>.NET MAUI Android Datadog Mobile Binding RUM Logs Trace APM SessionReplay NDK OkHttp OpenTelemetry OTel</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
 
     <!-- Optional but recommended: avoid warnings about missing lib/ files -->
     <NoWarn>$(NoWarn);NU5128</NoWarn>
-  </PropertyGroup>
-
-  <!-- Version for the dependency set -->
-  <PropertyGroup>
-    <!-- Use the same property you already have in Directory.Build.props -->
-    <DatadogSdkVersion Condition="'$(DatadogSdkVersion)' == ''">3.8.1</DatadogSdkVersion>
   </PropertyGroup>
 
   <!-- Meta-package dependencies: PackageReference to avoid duplicate class errors -->
@@ -51,12 +47,8 @@
 
   </ItemGroup>
 
-  <!-- Ship the AndroidX duplicate class fix .targets file with the NuGet package.
-       buildTransitive: imported by ALL consumers (direct and transitive)
-       build: imported by direct consumers only -->
+  <!-- Package README -->
   <ItemGroup>
-    <None Include="build/Datadog.MAUI.Android.Binding.targets" Pack="true" PackagePath="buildTransitive/" />
-    <None Include="build/Datadog.MAUI.Android.Binding.targets" Pack="true" PackagePath="build/" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
-
 </Project>

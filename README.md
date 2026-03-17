@@ -231,16 +231,44 @@ dotnet pack -c Release -o artifacts/packages
 
 For more detailed build instructions, see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
+### Running the Sample App
+
+The repository includes a comprehensive sample app demonstrating all SDK features:
+
+```bash
+# Quick start (auto-loads .env from sample directory)
+cd samples/DatadogMauiSample
+cp .env.example .env       # Copy and edit with your Datadog credentials
+
+cd ../..                   # Return to repository root
+make run-ios              # iOS - automatically loads samples/DatadogMauiSample/.env
+make run-android          # Android - automatically loads samples/DatadogMauiSample/.env
+```
+
+See [samples/DatadogMauiSample/README.md](samples/DatadogMauiSample/README.md) for detailed setup instructions.
+
 ## Documentation
 
-### Developer Documentation
+📚 **[Full Documentation Site](https://kyletaylored.github.io/dd-sdk-maui/)**
 
-For comprehensive information about building, contributing, and understanding this SDK's architecture:
+### For SDK Users
 
-- **[Getting Started](docs/GETTING_STARTED.md)** - Setup and development guide
-- **[Project Overview](docs/PROJECT_OVERVIEW.md)** - Architecture and technical details
-- **[Android Dependency Management](docs/ANDROID_DEPENDENCY_MANAGEMENT.md)** - Binding dependency patterns
-- **[Contributing Guide](docs/CONTRIBUTING.md)** - How to contribute to this project
+Complete guides for using the SDK in your application:
+
+- **[Using the SDK](https://kyletaylored.github.io/dd-sdk-maui/getting-started/using-the-sdk)** - Installation, configuration, and usage
+- **[API Reference](https://kyletaylored.github.io/dd-sdk-maui/api-reference)** - Complete API documentation
+- **[Code Examples](https://kyletaylored.github.io/dd-sdk-maui/examples)** - Real-world usage examples
+- **[What is NLI?](https://kyletaylored.github.io/dd-sdk-maui/guides/nli-primer)** - Understanding Native Library Interop
+
+### For SDK Developers
+
+Guides for building and contributing to the SDK:
+
+- **[Installation & Setup](https://kyletaylored.github.io/dd-sdk-maui/getting-started/installation)** - Development environment setup
+- **[Developer Guide](https://kyletaylored.github.io/dd-sdk-maui/getting-started/developer-guide)** - Development workflows
+- **[Android Dependencies](https://kyletaylored.github.io/dd-sdk-maui/guides/android/dependencies)** - Android binding development
+- **[iOS Binding Strategy](https://kyletaylored.github.io/dd-sdk-maui/guides/ios/binding-strategy)** - iOS binding development
+- **[Project Overview](https://kyletaylored.github.io/dd-sdk-maui/project/overview)** - Architecture and technical details
 
 ### Datadog Resources
 

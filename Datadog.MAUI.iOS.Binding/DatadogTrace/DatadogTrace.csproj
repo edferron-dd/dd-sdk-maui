@@ -15,6 +15,7 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/DataDog/dd-sdk-maui</RepositoryUrl>
     <PackageTags>.NET MAUI iOS Datadog Mobile Binding Trace APM</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
 
     <XCFrameworkPath>../artifacts/DatadogTrace.xcframework</XCFrameworkPath>
     <IsTrimmable>false</IsTrimmable>
@@ -36,5 +37,10 @@
       <ForceLoad>True</ForceLoad>
       <LinkWithSwiftSystemLibraries>True</LinkWithSwiftSystemLibraries>
     </NativeReference>
+  </ItemGroup>
+
+  <!-- Package README -->
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

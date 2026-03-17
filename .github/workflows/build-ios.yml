@@ -15,17 +15,35 @@ on:
         type: string
 
 env:
-  XCODE_VERSION: '16.2'  # Must be one of https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md#xcode
+  XCODE_VERSION: '26.2'  # Must be one of https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md#xcode
 
 jobs:
   # Download XCFrameworks once and share across builds (requires macOS)
   download-xcframeworks:
     name: Download XCFrameworks
-    runs-on: macos-26
+    runs-on: macos-latest
+    outputs:
+      projects: ${{ steps.get-projects.outputs.projects }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Get binding projects from solution file
+        id: get-projects
+        run: |
+          cd Datadog.MAUI.iOS.Binding
+
+          # Get all projects from solution, exclude meta-package and header line
+          PROJECTS=$(dotnet sln list | tail -n +3 | grep -v '^Datadog.MAUI.iOS.Binding.csproj$')
+
+          echo "Found binding projects:"
+          echo "$PROJECTS"
+
+          # Save to output for later jobs (with full path)
+          echo "projects<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROJECTS" | awk '{print "Datadog.MAUI.iOS.Binding/" $0}' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Get SDK version
         id: sdk-version
@@ -86,7 +104,7 @@ jobs:
   # Build with .NET 9 for net9.0-ios support
   build-ios-net9:
     name: Build iOS (net9.0-ios)
-    runs-on: macos-26
+    runs-on: macos-latest
     needs: download-xcframeworks
 
     steps:
@@ -135,50 +153,47 @@ jobs:
           VERSION=$(grep -E '<DatadogSdkVersion>.*</DatadogSdkVersion>' Directory.Build.props | sed 's/.*<DatadogSdkVersion>\(.*\)<\/DatadogSdkVersion>.*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Cache NuGet packages (net9.0-ios)
-        id: cache-nuget-net9
+      - name: Cache net9.0-ios packages
+        id: cache-net9-packages
         uses: actions/cache@v5
         with:
-          path: ./artifacts-net9/*.nupkg
-          key: ${{ runner.os }}-ios-net9-packages-${{ steps.sdk-version.outputs.version }}-${{ hashFiles('Datadog.MAUI.iOS.Binding/**/*.csproj') }}
+          path: ./artifacts-net9
+          key: ${{ runner.os }}-ios-net9-packages-${{ steps.sdk-version.outputs.version }}-${{ hashFiles('Datadog.MAUI.iOS.Binding/**/*.csproj', 'Datadog.MAUI.iOS.Binding/**/*.cs', 'Directory.Build.props') }}
           restore-keys: |
             ${{ runner.os }}-ios-net9-packages-${{ steps.sdk-version.outputs.version }}-
 
       - name: Restore dependencies (individual packages only)
-        if: steps.cache-nuget-net9.outputs.cache-hit != 'true'
+        if: steps.cache-net9-packages.outputs.cache-hit != 'true'
         run: |
-          # Restore individual packages, skip meta-package
-          for dir in Datadog.MAUI.iOS.Binding/Datadog*; do
-            if [ -d "$dir" ] && [ -f "$dir"/*.csproj ] && [[ "$(basename $dir)" != "Datadog.MAUI.iOS.Binding" ]]; then
-              echo "Restoring $(basename $dir)..."
-              dotnet restore "$dir" -p:TargetFrameworks=net9.0-ios
+          # Restore individual packages from solution file
+          echo "${{ needs.download-xcframeworks.outputs.projects }}" | while read -r project; do
+            if [ -n "$project" ]; then
+              echo "Restoring $project..."
+              dotnet restore "$project" -p:TargetFrameworks=net9.0-ios
             fi
           done
-        continue-on-error: true  # iOS bindings not complete yet
 
       - name: Build iOS bindings (net9.0-ios)
-        if: steps.cache-nuget-net9.outputs.cache-hit != 'true'
+        if: steps.cache-net9-packages.outputs.cache-hit != 'true'
         run: |
-          # Build individual packages, skip meta-package
-          for dir in Datadog.MAUI.iOS.Binding/Datadog*; do
-            if [ -d "$dir" ] && [ -f "$dir"/*.csproj ] && [[ "$(basename $dir)" != "Datadog.MAUI.iOS.Binding" ]]; then
-              echo "Building $(basename $dir)..."
-              dotnet build "$dir" --configuration Release --no-restore -p:TargetFrameworks=net9.0-ios
+          # Build individual packages from solution file
+          echo "${{ needs.download-xcframeworks.outputs.projects }}" | while read -r project; do
+            if [ -n "$project" ]; then
+              echo "Building $project..."
+              dotnet build "$project" --configuration Release --no-restore -p:TargetFrameworks=net9.0-ios -v minimal
             fi
           done
-        continue-on-error: true  # iOS bindings not complete yet
 
       - name: Pack NuGet packages (net9.0-ios)
-        if: steps.cache-nuget-net9.outputs.cache-hit != 'true'
+        if: steps.cache-net9-packages.outputs.cache-hit != 'true'
         run: |
-          # Pack individual packages (excluding meta-package)
-          for dir in Datadog.MAUI.iOS.Binding/Datadog*; do
-            if [ -d "$dir" ] && [ -f "$dir"/*.csproj ] && [[ "$(basename $dir)" != "Datadog.MAUI.iOS.Binding" ]]; then
-              echo "Packing $(basename $dir)..."
-              dotnet pack "$dir" --configuration Release --no-build --output ./artifacts-net9 -p:TargetFrameworks=net9.0-ios
+          # Pack individual packages from solution file
+          echo "${{ needs.download-xcframeworks.outputs.projects }}" | while read -r project; do
+            if [ -n "$project" ]; then
+              echo "Packing $project..."
+              dotnet pack "$project" --configuration Release --no-build --output ./artifacts-net9 -p:TargetFrameworks=net9.0-ios
             fi
           done
-        continue-on-error: true  # iOS bindings not complete yet
 
       - name: Upload net9.0-ios packages
         if: success()
@@ -203,7 +218,7 @@ jobs:
   # Build with .NET 10 for net10.0-ios support
   build-ios-net10:
     name: Build iOS (net10.0-ios)
-    runs-on: macos-26
+    runs-on: macos-latest
     needs: download-xcframeworks
 
     steps:
@@ -230,6 +245,9 @@ jobs:
 
       - name: Verify SDK version
         run: dotnet --version
+        
+      - name: Install .NET MAUI iOS workload
+        run: dotnet workload install maui-ios
 
       - name: Cache .NET workloads
         uses: actions/cache@v5
@@ -243,59 +261,53 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-dotnet-workload-ios-
 
-      - name: Install .NET iOS workload
-        run: dotnet workload install ios
-
       - name: Get SDK version for cache key
         id: sdk-version
         run: |
           VERSION=$(grep -E '<DatadogSdkVersion>.*</DatadogSdkVersion>' Directory.Build.props | sed 's/.*<DatadogSdkVersion>\(.*\)<\/DatadogSdkVersion>.*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Cache NuGet packages (net10.0-ios)
-        id: cache-nuget-net10
+      - name: Cache net10.0-ios packages
+        id: cache-net10-packages
         uses: actions/cache@v5
         with:
-          path: ./artifacts-net10/*.nupkg
-          key: ${{ runner.os }}-ios-net10-packages-${{ steps.sdk-version.outputs.version }}-${{ hashFiles('Datadog.MAUI.iOS.Binding/**/*.csproj') }}
+          path: ./artifacts-net10
+          key: ${{ runner.os }}-ios-net10-packages-${{ steps.sdk-version.outputs.version }}-${{ hashFiles('Datadog.MAUI.iOS.Binding/**/*.csproj', 'Datadog.MAUI.iOS.Binding/**/*.cs', 'Directory.Build.props') }}
           restore-keys: |
             ${{ runner.os }}-ios-net10-packages-${{ steps.sdk-version.outputs.version }}-
 
       - name: Restore dependencies (individual packages only)
-        if: steps.cache-nuget-net10.outputs.cache-hit != 'true'
+        if: steps.cache-net10-packages.outputs.cache-hit != 'true'
         run: |
-          # Restore individual packages, skip meta-package
-          for dir in Datadog.MAUI.iOS.Binding/Datadog*; do
-            if [ -d "$dir" ] && [ -f "$dir"/*.csproj ] && [[ "$(basename $dir)" != "Datadog.MAUI.iOS.Binding" ]]; then
-              echo "Restoring $(basename $dir)..."
-              dotnet restore "$dir" -p:TargetFrameworks=net10.0-ios
+          # Restore individual packages from solution file
+          echo "${{ needs.download-xcframeworks.outputs.projects }}" | while read -r project; do
+            if [ -n "$project" ]; then
+              echo "Restoring $project..."
+              dotnet restore "$project" -p:TargetFrameworks=net10.0-ios
             fi
           done
-        continue-on-error: true  # iOS bindings not complete yet
 
       - name: Build iOS bindings (net10.0-ios)
-        if: steps.cache-nuget-net10.outputs.cache-hit != 'true'
+        if: steps.cache-net10-packages.outputs.cache-hit != 'true'
         run: |
-          # Build individual packages, skip meta-package
-          for dir in Datadog.MAUI.iOS.Binding/Datadog*; do
-            if [ -d "$dir" ] && [ -f "$dir"/*.csproj ] && [[ "$(basename $dir)" != "Datadog.MAUI.iOS.Binding" ]]; then
-              echo "Building $(basename $dir)..."
-              dotnet build "$dir" --configuration Release --no-restore -p:TargetFrameworks=net10.0-ios
+          # Build individual packages from solution file
+          echo "${{ needs.download-xcframeworks.outputs.projects }}" | while read -r project; do
+            if [ -n "$project" ]; then
+              echo "Building $project..."
+              dotnet build "$project" --configuration Release --no-restore -p:TargetFrameworks=net10.0-ios -v minimal
             fi
           done
-        continue-on-error: true  # iOS bindings not complete yet
 
       - name: Pack NuGet packages (net10.0-ios)
-        if: steps.cache-nuget-net10.outputs.cache-hit != 'true'
+        if: steps.cache-net10-packages.outputs.cache-hit != 'true'
         run: |
-          # Pack individual packages (excluding meta-package)
-          for dir in Datadog.MAUI.iOS.Binding/Datadog*; do
-            if [ -d "$dir" ] && [ -f "$dir"/*.csproj ] && [[ "$(basename $dir)" != "Datadog.MAUI.iOS.Binding" ]]; then
-              echo "Packing $(basename $dir)..."
-              dotnet pack "$dir" --configuration Release --no-build --output ./artifacts-net10 -p:TargetFrameworks=net10.0-ios
+          # Pack individual packages from solution file
+          echo "${{ needs.download-xcframeworks.outputs.projects }}" | while read -r project; do
+            if [ -n "$project" ]; then
+              echo "Packing $project..."
+              dotnet pack "$project" --configuration Release --no-build --output ./artifacts-net10 -p:TargetFrameworks=net10.0-ios
             fi
           done
-        continue-on-error: true  # iOS bindings not complete yet
 
       - name: Upload net10.0-ios packages
         if: success()
@@ -320,55 +332,46 @@ jobs:
   # Combine all target frameworks into unified packages
   combine-ios-packages:
     name: Combine iOS Packages
-    runs-on: ubuntu-latest
+    runs-on: macos-latest  # macOS required for packing iOS meta-package
     needs: [build-ios-net9, build-ios-net10]
-    if: success() || failure()  # Run even if builds failed (iOS incomplete)
 
     steps:
-      - name: Check if packages exist
-        id: check-packages
-        run: |
-          echo "Checking for iOS packages..."
-          echo "packages_exist=false" >> $GITHUB_OUTPUT
-
       - name: Download net9.0-ios packages
-        if: success()
         uses: actions/download-artifact@v7
         with:
           name: ios-nuget-packages-net9
           path: ./artifacts-net9
-        continue-on-error: true
 
       - name: Download net10.0-ios packages
-        if: success()
         uses: actions/download-artifact@v7
         with:
           name: ios-nuget-packages-net10
           path: ./artifacts-net10
-        continue-on-error: true
 
       - name: Combine packages for all target frameworks
-        if: success()
         run: |
           mkdir -p ./artifacts-combined
           mkdir -p ./temp-extract
 
-          # Check if we have any packages to combine (try net9 first, then net10)
-          if [ -d "./artifacts-net9" ] && [ -n "$(ls -A ./artifacts-net9/*.nupkg 2>/dev/null)" ]; then
-            BASE_DIR="./artifacts-net9"
-            echo "Using net9.0-ios as base"
-          elif [ -d "./artifacts-net10" ] && [ -n "$(ls -A ./artifacts-net10/*.nupkg 2>/dev/null)" ]; then
-            BASE_DIR="./artifacts-net10"
-            echo "Using net10.0-ios as base"
-          else
-            echo "No iOS packages found, skipping combine"
-            exit 0
+          # Verify both net9 and net10 packages exist
+          if [ ! -d "./artifacts-net9" ] || [ -z "$(ls -A ./artifacts-net9/*.nupkg 2>/dev/null)" ]; then
+            echo "Error: net9.0-ios packages not found"
+            exit 1
           fi
+
+          if [ ! -d "./artifacts-net10" ] || [ -z "$(ls -A ./artifacts-net10/*.nupkg 2>/dev/null)" ]; then
+            echo "Error: net10.0-ios packages not found"
+            exit 1
+          fi
+
+          echo "Found both net9.0-ios and net10.0-ios packages"
+          BASE_DIR="./artifacts-net9"
 
           # Process each package
           for base_pkg in $BASE_DIR/*.nupkg; do
-            pkg_name=$(basename "$base_pkg" | sed 's/\.[0-9]\+\.[0-9]\+\.[0-9]\+.*\.nupkg$//')
-            version=$(basename "$base_pkg" | sed -n 's/.*\.\([0-9]\+\.[0-9]\+\.[0-9]\+[^.]*\)\.nupkg$/\1/p')
+            # Use sed -E to handle + characters in regex on macOS
+            pkg_name=$(basename "$base_pkg" | sed -E 's/\.[0-9]+\.[0-9]+\.[0-9]+\.nupkg$//')
+            version=$(basename "$base_pkg" | sed -E -n 's/.*\.([0-9]+\.[0-9]+\.[0-9]+)\.nupkg$/\1/p')
 
             net9_pkg="./artifacts-net9/${pkg_name}.${version}.nupkg"
             net10_pkg="./artifacts-net10/${pkg_name}.${version}.nupkg"
@@ -408,51 +411,46 @@ jobs:
             # Clean up temp directories
             rm -rf "./temp-extract/base"
 
-            echo "  ✅ Created combined package: ${pkg_name}.${version}.nupkg"
+            echo "Created combined package: ${pkg_name}.${version}.nupkg"
           done
 
           echo ""
           echo "Combined packages:"
-          ls -lh ./artifacts-combined/ || echo "No packages created"
-        continue-on-error: true
+          ls -lh ./artifacts-combined/
 
       - name: Verify combined packages before meta-package build
-        if: success()
         run: |
           echo "Checking artifacts-combined directory..."
           ls -la ./artifacts-combined/ || echo "Directory does not exist"
           echo "Package count: $(ls -1 ./artifacts-combined/*.nupkg 2>/dev/null | wc -l)"
 
       - name: Checkout repository for meta-package build
-        if: success()
         uses: actions/checkout@v6
         with:
           path: repo
 
       - name: Setup .NET SDK 10 for meta-package
-        if: success()
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
+      - name: Install .NET iOS workload for meta-package
+        run: dotnet workload install maui-ios
+
       - name: Build and pack iOS meta-package
-        if: success()
         run: |
           # Restore and pack the meta-package using combined packages from parent directory
           LOCAL_SOURCE="$(pwd)/artifacts-combined"
           echo "Restoring iOS meta-package from: $LOCAL_SOURCE"
-          ls -la "$LOCAL_SOURCE/" || echo "Local source does not exist"
+          ls -la "$LOCAL_SOURCE/"
           dotnet restore repo/Datadog.MAUI.iOS.Binding/Datadog.MAUI.iOS.Binding.csproj --source "$LOCAL_SOURCE" --source https://api.nuget.org/v3/index.json
           dotnet pack repo/Datadog.MAUI.iOS.Binding/Datadog.MAUI.iOS.Binding.csproj --configuration Release --output ./artifacts-combined --no-build
-        continue-on-error: true  # iOS bindings not complete yet
 
       - name: Upload combined iOS packages
-        if: success()
         uses: actions/upload-artifact@v6
         with:
           name: ios-nuget-packages
           path: ./artifacts-combined/*.nupkg
-          if-no-files-found: warn
           retention-days: 30
 
       - name: Package summary
@@ -460,7 +458,6 @@ jobs:
           echo "## iOS NuGet Packages Status" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -d "./artifacts-combined" ] && [ -n "$(ls -A ./artifacts-combined/*.nupkg 2>/dev/null)" ]; then
-            echo "✅ iOS packages built successfully" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Target frameworks included:" >> $GITHUB_STEP_SUMMARY
             echo "- net9.0-ios" >> $GITHUB_STEP_SUMMARY
@@ -471,76 +468,8 @@ jobs:
             ls -1 ./artifacts-combined/*.nupkg | xargs -n1 basename >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ iOS bindings not yet complete - builds skipped" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ iOS bindings skipped - requires Objective-C API definitions" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "iOS bindings require Objective-C API definitions to be generated." >> $GITHUB_STEP_SUMMARY
             echo "XCFrameworks have been downloaded and cached successfully." >> $GITHUB_STEP_SUMMARY
           fi
-
-  # Build iOS sample app (requires macOS)
-  build-ios-sample:
-    name: Build iOS Sample App
-    runs-on: macos-26  # macOS required for iOS app compilation
-    needs: combine-ios-packages
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-      - name: Setup .NET SDK 10
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Install .NET iOS workload
-        run: dotnet workload install ios
-
-      - name: Download iOS packages
-        uses: actions/download-artifact@v7
-        with:
-          name: ios-nuget-packages
-          path: ./artifacts
-
-      - name: Get package version from artifacts
-        id: package-version
-        run: |
-          # Extract version from first package filename
-          PACKAGE=$(ls ./artifacts/*.nupkg 2>/dev/null | head -1 | xargs basename || echo "")
-          if [ -n "$PACKAGE" ]; then
-            VERSION=$(echo "$PACKAGE" | sed -E 's/.*\.([0-9]+\.[0-9]+\.[0-9]+)\.nupkg/\1/')
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "Detected version: $VERSION from package: $PACKAGE"
-          else
-            echo "No packages found"
-            exit 1
-          fi
-
-      - name: Restore MAUI workloads for sample app
-        run: dotnet workload restore samples/DatadogMauiSample/DatadogMauiSample.csproj
-
-      - name: Restore sample app dependencies
-        run: dotnet restore samples/DatadogMauiSample/DatadogMauiSample.csproj -p:TargetFrameworks=net10.0-ios
-
-      - name: Build sample app
-        run: dotnet build samples/DatadogMauiSample/DatadogMauiSample.csproj --configuration Release --no-restore -f net10.0-ios -p:TargetFrameworks=net10.0-ios -p:BuildIpa=true
-
-      - name: Upload sample app
-        uses: actions/upload-artifact@v6
-        with:
-          name: ios-sample-app
-          path: |
-            samples/DatadogMauiSample/bin/Release/**/*.app
-            samples/DatadogMauiSample/bin/Release/**/*.ipa
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Sample build summary
-        run: |
-          echo "## iOS Sample App Built" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Sample app compiled successfully using combined NuGet packages" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Package version: ${{ steps.package-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY

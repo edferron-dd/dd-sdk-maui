@@ -27,6 +27,7 @@ bld/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+!artifacts/.gitkeep
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
@@ -35,6 +36,8 @@ ScaffoldingReadMe.txt
 *.nupkg
 # NuGet Symbol Packages
 *.snupkg
+# Temporary nuget.config files (created by CI/test scripts)
+samples/**/nuget.config
 
 # Others
 ~$*
@@ -63,6 +66,7 @@ xcuserdata/
 # XCFrameworks and artifacts (downloaded separately)
 *.xcframework/
 **/artifacts/
+!**/artifacts/.gitkeep
 **/Generated/
 
 # Android
@@ -70,6 +74,8 @@ xcuserdata/
 *.jar
 .gradle/
 build/
+# Exception: MSBuild SDK packages need their build/ directory
+!Datadog.MAUI.Symbols/build/
 captures/
 .externalNativeBuild/
 .cxx/
@@ -87,6 +93,7 @@ _reference/
 *.sln.docstates
 *.userprefs
 *.sln.iml
+
 # Environment files with secrets
 .env
 *.env
@@ -94,3 +101,7 @@ _reference/
 
 # Generated Datadog RUM config files (contain credentials)
 **/Config/datadog-rum-*.config
+
+# Claude docs
+/*.md
+!/README.md

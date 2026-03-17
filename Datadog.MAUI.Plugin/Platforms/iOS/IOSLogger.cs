@@ -1,5 +1,7 @@
 using DatadogWrapper;
 using Datadog.Maui.Logs;
+using Datadog.iOS.Logs;
+using Datadog.iOS.Internal;
 using Foundation;
 
 namespace Datadog.Maui.Platforms.iOS;
