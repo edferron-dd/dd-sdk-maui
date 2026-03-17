@@ -5,99 +5,9 @@ using ObjCRuntime;
 
 namespace Datadog.iOS.DatadogLogs
 {
-	// @interface DDLogEvent : NSObject
-	[BaseType (typeof(NSObject))]
-	[DisableDefaultCtor]
-	interface DDLogEvent
-	{
-		// @property (readonly, copy, nonatomic) NSDate * _Nonnull date;
-		[Export ("date", ArgumentSemantic.Copy)]
-		NSDate Date { get; }
-
-		// @property (readonly, nonatomic) enum DDLogEventStatus status;
-		[Export ("status")]
-		DDLogEventStatus Status { get; }
-
-		// @property (copy, nonatomic) NSString * _Nonnull message;
-		[Export ("message")]
-		string Message { get; set; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventError * _Nullable error;
-		[NullAllowed, Export ("error", ArgumentSemantic.Strong)]
-		DDLogEventError Error { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nonnull serviceName;
-		[Export ("serviceName")]
-		string ServiceName { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nonnull environment;
-		[Export ("environment")]
-		string Environment { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nonnull loggerName;
-		[Export ("loggerName")]
-		string LoggerName { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nonnull loggerVersion;
-		[Export ("loggerVersion")]
-		string LoggerVersion { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nullable threadName;
-		[NullAllowed, Export ("threadName")]
-		string ThreadName { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nonnull applicationVersion;
-		[Export ("applicationVersion")]
-		string ApplicationVersion { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nonnull applicationBuildNumber;
-		[Export ("applicationBuildNumber")]
-		string ApplicationBuildNumber { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nullable buildId;
-		[NullAllowed, Export ("buildId")]
-		string BuildId { get; }
-
-		// @property (readonly, copy, nonatomic) NSString * _Nullable variant;
-		[NullAllowed, Export ("variant")]
-		string Variant { get; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventDd * _Nonnull dd;
-		[Export ("dd", ArgumentSemantic.Strong)]
-		DDLogEventDd Dd { get; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventDevice * _Nonnull device;
-		[Export ("device", ArgumentSemantic.Strong)]
-		DDLogEventDevice Device { get; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventOperatingSystem * _Nonnull os;
-		[Export ("os", ArgumentSemantic.Strong)]
-		DDLogEventOperatingSystem Os { get; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventUserInfo * _Nonnull userInfo;
-		[Export ("userInfo", ArgumentSemantic.Strong)]
-		DDLogEventUserInfo UserInfo { get; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventAccountInfo * _Nullable accountInfo;
-		[NullAllowed, Export ("accountInfo", ArgumentSemantic.Strong)]
-		DDLogEventAccountInfo AccountInfo { get; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventNetworkConnectionInfo * _Nullable networkConnectionInfo;
-		[NullAllowed, Export ("networkConnectionInfo", ArgumentSemantic.Strong)]
-		DDLogEventNetworkConnectionInfo NetworkConnectionInfo { get; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventCarrierInfo * _Nullable mobileCarrierInfo;
-		[NullAllowed, Export ("mobileCarrierInfo", ArgumentSemantic.Strong)]
-		DDLogEventCarrierInfo MobileCarrierInfo { get; }
-
-		// @property (readonly, nonatomic, strong) DDLogEventAttributes * _Nonnull attributes;
-		[Export ("attributes", ArgumentSemantic.Strong)]
-		DDLogEventAttributes Attributes { get; }
-
-		// @property (copy, nonatomic) NSArray<NSString *> * _Nullable tags;
-		[NullAllowed, Export ("tags", ArgumentSemantic.Copy)]
-		string[] Tags { get; set; }
-	}
+	// NOTE: DDLogEvent has been removed. It is a Swift class stub (__objc_stublist)
+	// that dyld cannot resolve at launch. Log event mapping goes through
+	// DDWrapperLogs instead.
 
 	// @interface DDLogEventAccountInfo : NSObject
 	[BaseType (typeof(NSObject))]
@@ -533,8 +443,6 @@ namespace Datadog.iOS.DatadogLogs
 		[DesignatedInitializer]
 		NativeHandle Constructor ([NullAllowed] NSUrl customEndpoint);
 
-		// -(void)setEventMapper:(DDLogEvent * _Nullable (^ _Nonnull)(DDLogEvent * _Nonnull))mapper;
-		[Export ("setEventMapper:")]
-		void SetEventMapper (Func<DDLogEvent, DDLogEvent> mapper);
+		// SetEventMapper removed: DDLogEvent is a Swift class stub and has been removed.
 	}
 }

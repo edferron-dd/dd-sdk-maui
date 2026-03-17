@@ -10,17 +10,39 @@
 # 3. Pack consumer plugin package (final user-facing package)
 #
 # Usage:
-#   ./pack.sh [configuration] [output-dir]
+#   ./pack.sh [configuration] [output-dir] [--source <url-or-path>]
 #
 # Examples:
-#   ./pack.sh                           # Pack in Release to ./artifacts
-#   ./pack.sh Release ./my-packages     # Pack in Release to custom directory
-#   ./pack.sh Debug                     # Pack in Debug to ./artifacts
+#   ./pack.sh                                          # Pack in Release to ./artifacts, nuget.org source
+#   ./pack.sh Release ./my-packages                    # Pack in Release to custom directory
+#   ./pack.sh Debug                                    # Pack in Debug to ./artifacts
+#   ./pack.sh Release ./artifacts --source /path/to/local/packages
+#   ./pack.sh Release ./artifacts --source https://nuget.pkg.github.com/kyletaylored/index.json
 
 set -e
 
+# ---------------------------------------------------------------------------
+# Parse arguments
+# ---------------------------------------------------------------------------
 CONFIGURATION="${1:-Release}"
 OUTPUT_DIR="${2:-./artifacts}"
+EXTRA_NUGET_SOURCE=""
+
+# Parse optional flags (--source)
+shift 2 2>/dev/null || true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --source)
+            EXTRA_NUGET_SOURCE="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
@@ -35,6 +57,9 @@ echo -e "${CYAN}=====================================${NC}"
 echo -e "${CYAN}Datadog MAUI SDK - NuGet Packaging${NC}"
 echo -e "${CYAN}Configuration: $CONFIGURATION${NC}"
 echo -e "${CYAN}Output: $OUTPUT_DIR${NC}"
+if [ -n "$EXTRA_NUGET_SOURCE" ]; then
+    echo -e "${CYAN}Extra source: $EXTRA_NUGET_SOURCE${NC}"
+fi
 echo -e "${CYAN}=====================================${NC}\n"
 
 # Ensure output directory exists
@@ -44,6 +69,15 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
 echo -e "${CYAN}Output directory: $OUTPUT_DIR${NC}\n"
+
+# Build the --source flags used across all dotnet restore/pack commands.
+# Always includes the local output dir (now absolute) and nuget.org.
+# If --source was provided, it is added as an additional source.
+NUGET_ORG="https://api.nuget.org/v3/index.json"
+SOURCE_ARGS=(--source "$OUTPUT_DIR" --source "$NUGET_ORG")
+if [ -n "$EXTRA_NUGET_SOURCE" ]; then
+    SOURCE_ARGS+=(--source "$EXTRA_NUGET_SOURCE")
+fi
 
 #
 # Step A: Pack all module binding packages (Android + iOS)
@@ -64,14 +98,15 @@ ANDROID_MODULES=(
     "dd-sdk-android-flags/dd-sdk-android-flags.csproj"
     "dd-sdk-android-okhttp/dd-sdk-android-okhttp.csproj"
     "dd-sdk-android-trace-otel/dd-sdk-android-trace-otel.csproj"
-    # "dd-sdk-android-okhttp-otel/dd-sdk-android-okhttp-otel.csproj"  # Not yet implemented
-    # "dd-sdk-android-gradle-plugin/dd-sdk-android-gradle-plugin.csproj"  # Archived - incompatible with MAUI
+    "dd-sdk-android-okhttp-otel/dd-sdk-android-okhttp-otel.csproj"
+    "opentracing-api/opentracing-api.csproj"
 )
 
 for module in "${ANDROID_MODULES[@]}"; do
     PROJECT_PATH="$ROOT_DIR/Datadog.MAUI.Android.Binding/$module"
     if [ -f "$PROJECT_PATH" ]; then
         echo -e "  Packing: $(basename $(dirname $module))..."
+        dotnet build "$PROJECT_PATH" -c "$CONFIGURATION" -v minimal > /dev/null 2>&1 || true
         dotnet pack "$PROJECT_PATH" -c "$CONFIGURATION" -o "$OUTPUT_DIR" --no-build -v minimal || {
             echo -e "${RED}  ✗ Failed to pack $module${NC}"
             exit 1
@@ -94,13 +129,16 @@ if [ "$(uname)" = "Darwin" ]; then
         "DatadogSessionReplay/DatadogSessionReplay.csproj"
         "DatadogWebViewTracking/DatadogWebViewTracking.csproj"
         "DatadogFlags/DatadogFlags.csproj"
+        "OpenTelemetryApi/OpenTelemetryApi.csproj"
+        "DatadogWrapper/DatadogWrapper.csproj"
     )
 
     for module in "${IOS_MODULES[@]}"; do
         PROJECT_PATH="$ROOT_DIR/Datadog.MAUI.iOS.Binding/$module"
         if [ -f "$PROJECT_PATH" ]; then
             echo -e "  Packing: $(basename $(dirname $module))..."
-            dotnet pack "$PROJECT_PATH" -c "$CONFIGURATION" -o "$OUTPUT_DIR" --no-build -v minimal || {
+            dotnet build "$PROJECT_PATH" -c "$CONFIGURATION" -v minimal > /dev/null 2>&1 || true
+            dotnet pack "$PROJECT_PATH" -c "$CONFIGURATION" -o "$OUTPUT_DIR" "${SOURCE_ARGS[@]}" --no-build -v minimal || {
                 echo -e "${RED}  ✗ Failed to pack $module${NC}"
                 exit 1
             }
@@ -123,9 +161,11 @@ echo -e "${GREEN}Packing Android meta-package:${NC}"
 ANDROID_META="$ROOT_DIR/Datadog.MAUI.Android.Binding/Datadog.MAUI.Android.Binding.csproj"
 if [ -f "$ANDROID_META" ]; then
     echo -e "  Packing: Datadog.MAUI.Android.Binding..."
+    # Restore with local source to resolve the module packages created in Step A
+    dotnet restore "$ANDROID_META" "${SOURCE_ARGS[@]}" -v minimal > /dev/null 2>&1 || true
     # IMPORTANT: Use --source to allow the meta-package to find the module packages we just packed
     # Use --no-build since meta-packages don't produce assemblies
-    dotnet pack "$ANDROID_META" -c "$CONFIGURATION" -o "$OUTPUT_DIR" --source "$OUTPUT_DIR" --no-build -v minimal || {
+    dotnet pack "$ANDROID_META" -c "$CONFIGURATION" -o "$OUTPUT_DIR" "${SOURCE_ARGS[@]}" --no-build --no-restore -v minimal || {
         echo -e "${RED}  ✗ Failed to pack Android meta-package${NC}"
         exit 1
     }
@@ -139,8 +179,10 @@ if [ "$(uname)" = "Darwin" ]; then
     IOS_META="$ROOT_DIR/Datadog.MAUI.iOS.Binding/Datadog.MAUI.iOS.Binding.csproj"
     if [ -f "$IOS_META" ]; then
         echo -e "  Packing: Datadog.MAUI.iOS.Binding..."
+        # Restore with local source to resolve package dependencies
+        dotnet restore "$IOS_META" "${SOURCE_ARGS[@]}" -v minimal > /dev/null 2>&1 || true
         # Use --no-build since meta-packages don't produce assemblies
-        dotnet pack "$IOS_META" -c "$CONFIGURATION" -o "$OUTPUT_DIR" --source "$OUTPUT_DIR" --no-build -v minimal || {
+        dotnet pack "$IOS_META" -c "$CONFIGURATION" -o "$OUTPUT_DIR" --no-build -v minimal || {
             echo -e "${RED}  ✗ Failed to pack iOS meta-package${NC}"
             exit 1
         }
@@ -163,7 +205,7 @@ PLUGIN="$ROOT_DIR/Datadog.MAUI.Plugin/Datadog.MAUI.Plugin.csproj"
 if [ -f "$PLUGIN" ]; then
     echo -e "${GREEN}Packing: Datadog.MAUI (consumer plugin)...${NC}"
     # IMPORTANT: Use --source to allow the plugin to find the platform meta-packages
-    dotnet pack "$PLUGIN" -c "$CONFIGURATION" -o "$OUTPUT_DIR" --source "$OUTPUT_DIR" -v minimal || {
+    dotnet pack "$PLUGIN" -c "$CONFIGURATION" -o "$OUTPUT_DIR" "${SOURCE_ARGS[@]}" -v minimal || {
         echo -e "${RED}  ✗ Failed to pack consumer plugin package${NC}"
         exit 1
     }

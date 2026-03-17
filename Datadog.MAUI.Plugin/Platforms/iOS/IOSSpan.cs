@@ -1,56 +1,58 @@
-using Datadog.iOS.DatadogTrace;
-using Datadog.iOS.DatadogInternal;
+using DatadogWrapper;
 using Foundation;
 
 namespace Datadog.Maui.Platforms.iOS;
 
+/// <summary>
+/// iOS span backed by the DatadogWrapper Swift static library.
+/// Holds a span UUID instead of a native OTSpan — all span operations go through
+/// DDWrapperTrace which manages the OTSpan registry on the Swift side.
+/// </summary>
 internal class IOSSpan : Tracing.ISpan
 {
-    private readonly OTSpan _nativeSpan;
+    private readonly string _spanId;
 
-    public IOSSpan(OTSpan nativeSpan)
+    public IOSSpan(string spanId)
     {
-        _nativeSpan = nativeSpan;
+        _spanId = spanId;
     }
 
-    // Expose native span for tracer to use
-    internal OTSpan NativeSpan => _nativeSpan;
+    // Exposed for Tracer.ios.cs header injection (internal UUID, not the OT span ID)
+    internal string NativeSpanId => _spanId;
 
-    // Note: iOS OpenTelemetry API doesn't expose SpanId/TraceId directly
-    public string SpanId => string.Empty;
-
+    // SpanId/TraceId are not surfaced through the ObjC OpenTracing API.
+    string Tracing.ISpan.SpanId => string.Empty;
     public string TraceId => string.Empty;
 
     public void SetTag(string key, string value)
     {
-        _nativeSpan.SetTag(key: key, value: value);
+        DDWrapperTrace.SetStringTag(_spanId, key, value);
     }
 
     public void SetTag(string key, object value)
     {
-        // Convert object to appropriate type for iOS API
         switch (value)
         {
-            case string strValue:
-                _nativeSpan.SetTag(key: key, value: strValue);
+            case string s:
+                DDWrapperTrace.SetStringTag(_spanId, key, s);
                 break;
-            case bool boolValue:
-                _nativeSpan.SetTag(key: key, boolValue: boolValue);
+            case bool b:
+                DDWrapperTrace.SetBoolTag(_spanId, key, b);
                 break;
-            case int intValue:
-                _nativeSpan.SetTag(key: key, numberValue: new NSNumber(intValue));
+            case int i:
+                DDWrapperTrace.SetNumberTag(_spanId, key, new NSNumber(i));
                 break;
-            case long longValue:
-                _nativeSpan.SetTag(key: key, numberValue: new NSNumber(longValue));
+            case long l:
+                DDWrapperTrace.SetNumberTag(_spanId, key, new NSNumber(l));
                 break;
-            case float floatValue:
-                _nativeSpan.SetTag(key: key, numberValue: new NSNumber(floatValue));
+            case float f:
+                DDWrapperTrace.SetNumberTag(_spanId, key, new NSNumber(f));
                 break;
-            case double doubleValue:
-                _nativeSpan.SetTag(key: key, numberValue: new NSNumber(doubleValue));
+            case double d:
+                DDWrapperTrace.SetNumberTag(_spanId, key, new NSNumber(d));
                 break;
             default:
-                _nativeSpan.SetTag(key: key, value: value.ToString() ?? string.Empty);
+                DDWrapperTrace.SetStringTag(_spanId, key, value?.ToString() ?? string.Empty);
                 break;
         }
     }
@@ -65,45 +67,26 @@ internal class IOSSpan : Tracing.ISpan
                 NSError.LocalizedDescriptionKey
             )
         );
-        _nativeSpan.SetError(nsError);
+        DDWrapperTrace.SetNSError(_spanId, nsError);
     }
 
     public void SetError(string message)
     {
-        _nativeSpan.SetTag(key: "error", boolValue: true);
-        _nativeSpan.SetTag(key: "error.message", value: message);
+        DDWrapperTrace.SetErrorMessage(_spanId, message);
     }
 
     public void AddEvent(string name, Dictionary<string, object>? attributes = null)
     {
-        if (attributes != null && attributes.Count > 0)
-        {
-            var nsAttributes = ConvertAttributes(attributes);
-            _nativeSpan.Log(fields: nsAttributes);
-        }
-        else
-        {
-            _nativeSpan.Log(fields: new NSDictionary<NSString, NSObject>(
-                new NSString("event"),
-                new NSString(name)
-            ));
-        }
+        DDWrapperTrace.LogEvent(_spanId, name);
     }
 
     public void Finish()
     {
-        _nativeSpan.Finish();
+        DDWrapperTrace.FinishSpan(_spanId);
     }
 
     public void Dispose()
     {
         Finish();
-    }
-
-    private static NSDictionary<NSString, NSObject> ConvertAttributes(Dictionary<string, object> attributes)
-    {
-        var keys = attributes.Keys.Select(k => new NSString(k)).ToArray();
-        var values = attributes.Values.Select(v => NSObject.FromObject(v)).ToArray();
-        return NSDictionary<NSString, NSObject>.FromObjectsAndKeys(values, keys);
     }
 }

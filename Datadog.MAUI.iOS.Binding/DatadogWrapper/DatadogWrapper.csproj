@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net9.0-ios;net10.0-ios</TargetFrameworks>
+    <SupportedOSPlatformVersion>17.0</SupportedOSPlatformVersion>
+    <NoWarn>$(NoWarn);NETSDK1202;NU5123;CS8767</NoWarn>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>true</ImplicitUsings>
+    <IsBindingProject>true</IsBindingProject>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>Datadog.MAUI.iOS.Wrapper</AssemblyName>
+
+    <PackageId>Datadog.MAUI.iOS.Wrapper</PackageId>
+    <Authors>Datadog</Authors>
+    <Description>Swift wrapper binding that resolves Swift class stub issues on iOS devices. Wraps dd-sdk-ios initialization, RUM, Logs, Trace, and SessionReplay behind ObjC-stable classes.</Description>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/DataDog/dd-sdk-maui</RepositoryUrl>
+    <PackageTags>.NET MAUI iOS Datadog Binding Wrapper</PackageTags>
+
+    <!-- Static library XCFramework built by scripts/build-ios-wrapper.sh -->
+    <XCFrameworkPath>../artifacts/DatadogWrapper.xcframework</XCFrameworkPath>
+    <IsTrimmable>false</IsTrimmable>
+  </PropertyGroup>
+
+  <!-- The wrapper depends on all dd-sdk-ios frameworks at link time -->
+  <ItemGroup>
+    <ProjectReference Include="..\DatadogCore\DatadogCore.csproj" />
+    <ProjectReference Include="..\DatadogRUM\DatadogRUM.csproj" />
+    <ProjectReference Include="..\DatadogLogs\DatadogLogs.csproj" />
+    <ProjectReference Include="..\DatadogTrace\DatadogTrace.csproj" />
+    <ProjectReference Include="..\DatadogSessionReplay\DatadogSessionReplay.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ObjcBindingApiDefinition Include="ApiDefinition.cs" />
+    <ObjcBindingCoreSource Include="StructsAndEnums.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <NativeReference Include="$(XCFrameworkPath)">
+      <Kind>Static</Kind>
+      <SmartLink>True</SmartLink>
+      <ForceLoad>True</ForceLoad>
+      <LinkWithSwiftSystemLibraries>True</LinkWithSwiftSystemLibraries>
+    </NativeReference>
+  </ItemGroup>
+</Project>

@@ -214,89 +214,10 @@ namespace Datadog.iOS.DatadogTrace
 		bool ExtractWithFormat (string format, NSObject carrier, [NullAllowed] out NSError error);
 	}
 
-	// @interface DDTrace : NSObject
-	[BaseType (typeof(NSObject))]
-	interface DDTrace
-	{
-		// +(void)enableWith:(DDTraceConfiguration * _Nonnull)configuration;
-		[Static]
-		[Export ("enableWith:")]
-		void EnableWith (DDTraceConfiguration configuration);
-	}
-
-	// @interface DDTraceConfiguration : NSObject
-	[BaseType (typeof(NSObject))]
-	interface DDTraceConfiguration
-	{
-		// @property (nonatomic) float sampleRate;
-		[Export ("sampleRate")]
-		float SampleRate { get; set; }
-
-		// @property (copy, nonatomic) NSString * _Nullable service;
-		[NullAllowed, Export ("service")]
-		string Service { get; set; }
-
-		// @property (copy, nonatomic) NSDictionary<NSString *,id> * _Nullable tags;
-		[NullAllowed, Export ("tags", ArgumentSemantic.Copy)]
-		NSDictionary<NSString, NSObject> Tags { get; set; }
-
-		// -(void)setURLSessionTracking:(DDTraceURLSessionTracking * _Nonnull)tracking;
-		[Export ("setURLSessionTracking:")]
-		void SetURLSessionTracking (DDTraceURLSessionTracking tracking);
-
-		// @property (nonatomic) BOOL bundleWithRumEnabled;
-		[Export ("bundleWithRumEnabled")]
-		bool BundleWithRumEnabled { get; set; }
-
-		// @property (nonatomic) BOOL networkInfoEnabled;
-		[Export ("networkInfoEnabled")]
-		bool NetworkInfoEnabled { get; set; }
-
-		// @property (copy, nonatomic) NSUrl * _Nullable customEndpoint;
-		[NullAllowed, Export ("customEndpoint", ArgumentSemantic.Copy)]
-		NSUrl CustomEndpoint { get; set; }
-	}
-
-	// @interface DDTraceFirstPartyHostsTracing : NSObject
-	[BaseType (typeof(NSObject))]
-	[DisableDefaultCtor]
-	interface DDTraceFirstPartyHostsTracing
-	{
-		// -(instancetype _Nonnull)initWithHostsWithHeaderTypes:(NSDictionary<NSString *,NSSet<DDTracingHeaderType *> *> * _Nonnull)hostsWithHeaderTypes __attribute__((objc_designated_initializer));
-		[Export ("initWithHostsWithHeaderTypes:")]
-		[DesignatedInitializer]
-		NativeHandle Constructor (NSDictionary<NSString, NSSet<DDTracingHeaderType>> hostsWithHeaderTypes);
-
-		// -(instancetype _Nonnull)initWithHostsWithHeaderTypes:(NSDictionary<NSString *,NSSet<DDTracingHeaderType *> *> * _Nonnull)hostsWithHeaderTypes sampleRate:(float)sampleRate __attribute__((objc_designated_initializer));
-		[Export ("initWithHostsWithHeaderTypes:sampleRate:")]
-		[DesignatedInitializer]
-		NativeHandle Constructor (NSDictionary<NSString, NSSet<DDTracingHeaderType>> hostsWithHeaderTypes, float sampleRate);
-
-		// -(instancetype _Nonnull)initWithHosts:(NSSet<NSString *> * _Nonnull)hosts __attribute__((objc_designated_initializer));
-		[Export ("initWithHosts:")]
-		[DesignatedInitializer]
-		NativeHandle Constructor (NSSet<NSString> hosts);
-
-		// -(instancetype _Nonnull)initWithHosts:(NSSet<NSString *> * _Nonnull)hosts sampleRate:(float)sampleRate __attribute__((objc_designated_initializer));
-		[Export ("initWithHosts:sampleRate:")]
-		[DesignatedInitializer]
-		NativeHandle Constructor (NSSet<NSString> hosts, float sampleRate);
-	}
-
-	// @interface DDTraceURLSessionTracking : NSObject
-	[BaseType (typeof(NSObject))]
-	[DisableDefaultCtor]
-	interface DDTraceURLSessionTracking
-	{
-		// -(instancetype _Nonnull)initWithFirstPartyHostsTracing:(DDTraceFirstPartyHostsTracing * _Nonnull)firstPartyHostsTracing __attribute__((objc_designated_initializer));
-		[Export ("initWithFirstPartyHostsTracing:")]
-		[DesignatedInitializer]
-		NativeHandle Constructor (DDTraceFirstPartyHostsTracing firstPartyHostsTracing);
-
-		// -(void)setFirstPartyHostsTracing:(DDTraceFirstPartyHostsTracing * _Nonnull)firstPartyHostsTracing;
-		[Export ("setFirstPartyHostsTracing:")]
-		void SetFirstPartyHostsTracing (DDTraceFirstPartyHostsTracing firstPartyHostsTracing);
-	}
+	// NOTE: DDTrace, DDTraceConfiguration, DDTraceFirstPartyHostsTracing, and
+	// DDTraceURLSessionTracking have been removed. These are Swift class stubs
+	// (__objc_stublist) that dyld cannot resolve at launch. Tracing goes through
+	// DDWrapperTrace instead.
 
 	// @interface DDTracer : NSObject <OTTracer>
 	[BaseType (typeof(NSObject))]
