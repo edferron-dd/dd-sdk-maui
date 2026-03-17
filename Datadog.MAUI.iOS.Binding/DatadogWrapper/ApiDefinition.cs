@@ -247,4 +247,18 @@ interface DDWrapperSessionReplay
     [Static]
     [Export("enableWithSampleRate:textAndInputPrivacy:imagePrivacy:touchPrivacy:startRecordingImmediately:")]
     void Enable(float sampleRate, nint textAndInputPrivacy, nint imagePrivacy, nint touchPrivacy, bool startRecordingImmediately);
+
+    /// <summary>
+    /// Starts recording. Call this when startRecordingImmediately was false at enable time.
+    /// </summary>
+    [Static]
+    [Export("startRecording")]
+    void StartRecording();
+
+    /// <summary>
+    /// Stops the current session recording.
+    /// </summary>
+    [Static]
+    [Export("stopRecording")]
+    void StopRecording();
 }

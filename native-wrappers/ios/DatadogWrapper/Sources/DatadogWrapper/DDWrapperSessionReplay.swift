@@ -54,6 +54,18 @@ public class DDWrapperSessionReplay: NSObject {
         SessionReplay.enable(with: config)
     }
 
+    /// Starts recording the session. Only needed when startRecordingImmediately was false.
+    @objc(startRecording)
+    public static func startRecording() {
+        SessionReplay.startRecording()
+    }
+
+    /// Stops the current session recording.
+    @objc(stopRecording)
+    public static func stopRecording() {
+        SessionReplay.stopRecording()
+    }
+
     private static func parsePrivacyLevel(_ level: String) -> (TextAndInputPrivacyLevel, ImagePrivacyLevel, TouchPrivacyLevel) {
         switch level.lowercased() {
         case "allow":
