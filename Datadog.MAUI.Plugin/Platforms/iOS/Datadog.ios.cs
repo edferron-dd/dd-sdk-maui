@@ -1,9 +1,5 @@
 using DatadogWrapper;
 using Datadog.Maui.Configuration;
-using Datadog.iOS.Core;
-using Datadog.iOS.RUM;
-using Datadog.iOS.Logs;
-using Datadog.iOS.Trace;
 using Foundation;
 
 namespace Datadog.Maui;
@@ -58,51 +54,7 @@ public static partial class Datadog
 
     private static void InitializeTracing(TracingConfiguration tracingConfig)
     {
-        var traceConfiguration = new DDTraceConfiguration();
-        traceConfiguration.SampleRate = tracingConfig.SampleRate;
-
-        // Configure URLSession tracking with first-party hosts
-        if (tracingConfig.FirstPartyHosts.Length > 0)
-        {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine($"[Datadog] Configuring URLSession tracking for {tracingConfig.FirstPartyHosts.Length} first-party hosts");
-
-                // Create NSSet of host strings
-                var hosts = new NSSet<NSString>(
-                    tracingConfig.FirstPartyHosts.Select(h => new NSString(h)).ToArray()
-                );
-
-                // Create first-party hosts tracing configuration
-                var firstPartyHostsTracing = new DDTraceFirstPartyHostsTracing(hosts);
-
-                // Create URLSession tracking configuration
-                var urlSessionTracking = new DDTraceURLSessionTracking(firstPartyHostsTracing);
-
-                // Apply to trace configuration
-                traceConfiguration.SetURLSessionTracking(urlSessionTracking);
-
-                System.Diagnostics.Debug.WriteLine("[Datadog] ✓ URLSession tracking configured");
-
-                // Log configured hosts
-                foreach (var host in tracingConfig.FirstPartyHosts)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[Datadog]   - {host}");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[Datadog] ⚠ Failed to configure URLSession tracking: {ex.Message}");
-            }
-        }
-        else
-        {
-            System.Diagnostics.Debug.WriteLine("[Datadog] ℹ No first-party hosts configured for tracing");
-        }
-
-        DDTrace.EnableWith(traceConfiguration);
-
-        // EXPERIMENTAL: Try to enable URLSession instrumentation
+        DDWrapperTrace.Enable((float)tracingConfig.SampleRate);
         EnableURLSessionInstrumentation(tracingConfig);
     }
 

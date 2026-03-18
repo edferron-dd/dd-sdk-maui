@@ -1,6 +1,5 @@
-using Datadog.iOS.RUM;
+using DatadogWrapper;
 using Foundation;
-using Datadog.iOS.Internal;
 
 namespace Datadog.Maui.Rum;
 
@@ -49,58 +48,9 @@ public static partial class Rum
 
     static partial void PlatformAddError(string message, RumErrorSource source, Exception? exception, Dictionary<string, object>? attributes)
     {
-        var monitor = DDRUMMonitor.Shared;
         var errorSource = MapErrorSource(source);
-        var nsAttributes = attributes != null ? ConvertAttributes(attributes) : null;
-
-        if (exception != null)
-        {
-            // Create NSError with detailed exception information including stack trace
-            var userInfo = new NSMutableDictionary<NSString, NSObject>();
-
-            // Use provided message or exception message
-            var errorMessage = message ?? exception.Message;
-            userInfo[NSError.LocalizedDescriptionKey] = new NSString(errorMessage);
-
-            // Include exception type and full details
-            userInfo[new NSString("ExceptionType")] = new NSString(exception.GetType().FullName ?? exception.GetType().Name);
-            userInfo[new NSString("Message")] = new NSString(exception.Message);
-
-            // Include full stack trace if available
-            if (!string.IsNullOrEmpty(exception.StackTrace))
-            {
-                userInfo[new NSString("StackTrace")] = new NSString(exception.StackTrace);
-            }
-
-            // Include inner exception if present
-            if (exception.InnerException != null)
-            {
-                userInfo[new NSString("InnerException")] = new NSString(exception.InnerException.ToString());
-            }
-
-            // Create NSError with exception type as domain
-            var nsError = NSError.FromDomain(
-                new NSString(exception.GetType().Name),
-                -1,
-                userInfo
-            );
-
-            // Add error using NSError overload
-            monitor.AddError(
-                error: nsError,
-                source: errorSource,
-                attributes: nsAttributes
-            );
-        }
-        else
-        {
-            monitor.AddError(
-                message: message,
-                source: errorSource,
-                stack: null,
-                attributes: nsAttributes
-            );
-        }
+        var stack = exception?.StackTrace;
+        DDWrapperRUM.AddError(message, errorSource, stack, ConvertAttributes(attributes));
     }
 
     static partial void PlatformAddTiming(string name)

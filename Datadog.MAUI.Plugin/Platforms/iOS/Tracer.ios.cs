@@ -1,3 +1,4 @@
+using DatadogWrapper;
 using Datadog.iOS.Trace;
 using Foundation;
 

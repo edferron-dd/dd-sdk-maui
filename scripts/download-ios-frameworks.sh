@@ -33,7 +33,7 @@ if [ -z "$VERSION" ]; then
         -H "User-Agent: Datadog-MAUI-Binding-Script" \
         "https://api.github.com/repos/DataDog/dd-sdk-ios/releases/latest")
 
-    VERSION=$(echo "$LATEST_JSON" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+    VERSION=$(echo "$LATEST_JSON" | grep -o '"tag_name":"[^"]*"' | sed -E 's/"tag_name":"([^"]+)"/\1/')
 
     if [ -z "$VERSION" ]; then
         echo -e "${RED}Failed to fetch latest release from GitHub API${NC}"

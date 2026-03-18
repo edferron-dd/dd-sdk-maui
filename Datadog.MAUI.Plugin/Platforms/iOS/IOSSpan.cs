@@ -1,5 +1,4 @@
-using Datadog.iOS.Trace;
-using Datadog.iOS.Internal;
+using DatadogWrapper;
 using Foundation;
 
 namespace Datadog.Maui.Platforms.iOS;

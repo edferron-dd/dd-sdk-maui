@@ -138,7 +138,7 @@ public static partial class Datadog
             userInfo.Id,
             userInfo.Name,
             userInfo.Email,
-            extraInfo
+            null
         );
     }
 

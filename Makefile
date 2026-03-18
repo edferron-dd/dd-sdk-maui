@@ -47,7 +47,7 @@ download-ios-frameworks: ## Download iOS XCFrameworks (macOS only)
 		echo "$(RED)Error: iOS framework download requires macOS$(NC)"; \
 		exit 1; \
 	fi
-	@SDK_VERSION=$$(grep -E '<DatadogSdkVersion>.*</DatadogSdkVersion>' Directory.Build.props | sed 's/.*<DatadogSdkVersion>\(.*\)<\/DatadogSdkVersion>.*/\1/'); \
+	@IOS_VERSION=$$(grep -E '<DatadogIosNativeVersion>.*</DatadogIosNativeVersion>' Directory.Build.props | sed 's/.*<DatadogIosNativeVersion>\(.*\)<\/DatadogIosNativeVersion>.*/\1/'); \
 	VERSION_FILE="Datadog.MAUI.iOS.Binding/artifacts/.version"; \
 	NEED_DOWNLOAD=false; \
 	if [ ! -d "Datadog.MAUI.iOS.Binding/artifacts" ] || [ -z "$$(ls -A Datadog.MAUI.iOS.Binding/artifacts/*.xcframework 2>/dev/null)" ]; then \
@@ -56,17 +56,17 @@ download-ios-frameworks: ## Download iOS XCFrameworks (macOS only)
 	elif [ ! -f "$$VERSION_FILE" ]; then \
 		echo "$(YELLOW)Version file not found$(NC)"; \
 		NEED_DOWNLOAD=true; \
-	elif [ "$$(cat $$VERSION_FILE)" != "$$SDK_VERSION" ]; then \
-		echo "$(YELLOW)Version mismatch: have $$(cat $$VERSION_FILE), need $$SDK_VERSION$(NC)"; \
+	elif [ "$$(cat $$VERSION_FILE)" != "$$IOS_VERSION" ]; then \
+		echo "$(YELLOW)Version mismatch: have $$(cat $$VERSION_FILE), need $$IOS_VERSION$(NC)"; \
 		NEED_DOWNLOAD=true; \
 	else \
-		echo "$(GREEN)✓ XCFrameworks already current (v$$SDK_VERSION)$(NC)"; \
+		echo "$(GREEN)✓ XCFrameworks already current (v$$IOS_VERSION)$(NC)"; \
 	fi; \
 	if [ "$$NEED_DOWNLOAD" = "true" ]; then \
-		echo "$(BLUE)Downloading iOS XCFrameworks v$$SDK_VERSION...$(NC)"; \
+		echo "$(BLUE)Downloading iOS XCFrameworks v$$IOS_VERSION...$(NC)"; \
 		chmod +x scripts/download-ios-frameworks.sh; \
-		if scripts/download-ios-frameworks.sh; then \
-			echo "$$SDK_VERSION" > "$$VERSION_FILE"; \
+		if scripts/download-ios-frameworks.sh "$$IOS_VERSION" Datadog.MAUI.iOS.Binding; then \
+			echo "$$IOS_VERSION" > "$$VERSION_FILE"; \
 			echo "$(GREEN)✓ XCFrameworks downloaded$(NC)"; \
 		else \
 			echo "$(RED)Failed to download XCFrameworks$(NC)"; \
@@ -81,7 +81,7 @@ build-ios: download-ios-frameworks ## Build iOS binding projects (macOS only)
 		exit 1; \
 	fi
 	@cd Datadog.MAUI.iOS.Binding && \
-	for module in DatadogInternal DatadogCore DatadogLogs DatadogRUM DatadogTrace DatadogCrashReporting DatadogSessionReplay DatadogWebViewTracking DatadogFlags OpenTelemetryApi; do \
+	for module in DatadogInternal DatadogCore DatadogLogs DatadogRUM DatadogTrace DatadogCrashReporting DatadogSessionReplay DatadogWebViewTracking DatadogFlags OpenTelemetryApi DatadogWrapper; do \
 		echo "  Building $$module..."; \
 		dotnet build $$module/$$module.csproj --configuration Release --verbosity quiet || exit 1; \
 	done

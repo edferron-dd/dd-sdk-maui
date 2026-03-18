@@ -1,7 +1,13 @@
 <Project>
   <PropertyGroup>
     <!-- Datadog SDK Version - Keep in sync across iOS and Android -->
-    <DatadogSdkVersion>3.8.1</DatadogSdkVersion>
+    <DatadogSdkVersion>3.8.2</DatadogSdkVersion>
+
+    <!-- Native SDK versions — decoupled from DatadogSdkVersion (the MAUI wrapper version) -->
+    <!-- Android Maven artifacts available on Maven Central -->
+    <DatadogAndroidMavenVersion>3.6.0</DatadogAndroidMavenVersion>
+    <!-- iOS XCFrameworks from dd-sdk-ios GitHub releases -->
+    <DatadogIosNativeVersion>3.8.1</DatadogIosNativeVersion>
 
     <!-- Datadog Symbols Package Version - Independent versioning -->
     <DatadogSymbolsVersion>0.0.2</DatadogSymbolsVersion>
